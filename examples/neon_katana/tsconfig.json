@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "rootDir": "./src",
+    "outDir": "build/transpiled",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    
+    /* JSX Configuration */
+    "jsx": "react",
+    "jsxFactory": "Canvas.createElement",
+    "jsxFragmentFactory": "Canvas.Fragment",
+
+    "paths": {
+      "bokken": ["./types/index.d.ts"],
+      "bokken/*": ["./types/*.d.ts"]
+    }
+  },
+  "include": [
+    "src/**/*", 
+    "types/**/*"
+  ]
+}

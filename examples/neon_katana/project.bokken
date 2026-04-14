@@ -1,0 +1,69 @@
+{
+  "general": {
+    "displayTitle": "Neon Katana",
+    "internalSlug": "neon-katana",
+    "author": {
+      "person": {
+        "firstName": "John",
+        "lastName": "Doe"
+      },
+      "organization": {}
+    },
+    "projectVersion": "1.0.0-alpha"
+  },
+  "windowBase": {
+    "width": 800,
+    "height": 600,
+    "clearColor": "#FFFFFF"
+  },
+  "environments": {
+    "development": {
+      "windowOverrides": {
+        "isFullscreen": false,
+        "useVsync": false
+      },
+      "scriptingEngine": {
+        "runtime": {
+          "maxHeapSizeMb": 128,
+          "stackSizeKb": 1024,
+          "gcThresholdKb": 512,
+          "interruptHandlerMs": 50
+        },
+        "features": {
+          "enableBytecodeCache": false,
+          "enableProxy": true
+        },
+        "interop": {
+          "printToStandardOut": true,
+          "verbosity": "detailed"
+        }
+      }
+    },
+    "production": {
+      "windowOverrides": {
+        "isFullscreen": true,
+        "useVsync": true
+      },
+      "scriptingEngine": {
+        "runtime": {
+          "maxHeapSizeMb": 64,
+          "stackSizeKb": 512,
+          "gcThresholdKb": 256,
+          "interruptHandlerMs": 10
+        },
+        "features": {
+          "enableBytecodeCache": true,
+          "enableProxy": false
+        },
+        "interop": {
+          "printToStandardOut": false,
+          "verbosity": "silent"
+        }
+      }
+    }
+  },
+  "buildMetadata": {
+    "engineVersion": "0.4.0",
+    "lastBuilt": "2026-04-13T14:20:00Z"
+  }
+}

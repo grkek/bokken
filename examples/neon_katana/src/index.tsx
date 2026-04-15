@@ -1,43 +1,43 @@
-import Log from "bokken/log";
-import Canvas, { useState, Label, View, Align } from "bokken/canvas";
+import Canvas, { useState, Label, View, Align, Timing } from "bokken/canvas";
 
 function App() {
     const [count, setCount] = useState(0);
 
     return (
-        <View style={{ 
-            justifyContent: Align.center, 
-            alignItems: Align.center,
-            backgroundColor: 0x222222FF,
+        <View style={{
             width: "100%",
-            height: "100%"
+            height: "100%",
+            backgroundColor: 0x111111FF,
+            justifyContent: Align.Center,
+            alignItems: Align.Center
         }}>
-            {/* Using the 'text' prop is often more reliable for native bridges */}
-            <Label style={{ fontSize: 60, color: 0xFFFFFFFF, margin: 20 }}>Count: {count}</Label>
-            
+            {/* Display Count */}
+            <Label style={{ fontSize: 48, color: 0xFFFFFFFF, marginBottom: 20 }}>
+                {count}
+            </Label>
+
+            {/* Animated Button */}
             <View 
-                style={{ 
-                    width: 300,
-                    height: 100,
-                    backgroundColor: 0x00AAFFFF,
-                    margin: 20,
-                    justifyContent: Align.center,
-                    alignItems: Align.center,
+                style={{
+                    width: 64,
+                    height: 64,
+                    backgroundColor: 0x3366FFFF,
+                    borderRadius: 30,
+                    justifyContent: Align.Center,
+                    alignItems: Align.Center,
+                    hoverScale: 1.05,
+                    activeScale: 0.92,
+                    transitionDuration: 0.2,
+                    transitionTiming: Timing.EaseOut
                 }}
-                onClick={() => {
-                    Log.info("Button Clicked!");
-                    setCount(count + 1);
-                }}
+                onClick={() => setCount(count + 1)}
             >
-                <Label style={{ color: 0xFFFFFFFF, fontSize: 30 }}>Click Me!</Label>
+                <Label style={{ color: 0xFFFFFFFF, fontSize: 48 }}>+</Label>
             </View>
         </View>
     );
 }
 
 export function onStart() {
-    Log.info("Canvas App Starting...");
     Canvas.render(<App />);
 }
-
-export function onUpdate(deltaTime: number) { }

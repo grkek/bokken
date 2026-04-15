@@ -23,7 +23,7 @@ namespace Bokken
         }
 
         const WindowSettings &window = configuration.windowBase;
-        const auto &windowOVerrides = environmentConfiguration->windowOverrides;
+        const auto &windowOverrides = environmentConfiguration->windowOverrides;
         const auto &scriptingEngineConfiguration = environmentConfiguration->scriptingEngine;
 
         // SDL3 init
@@ -41,9 +41,33 @@ namespace Bokken
         }
 
         // Window
-        SDL_WindowFlags flags = 0;
-        if (windowOVerrides.isFullscreen)
+        SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+
+        flags |= SDL_WINDOW_OPENGL;
+
+        // Fullscreen overrides
+        if (windowOverrides.isFullscreen)
+        {
             flags |= SDL_WINDOW_FULLSCREEN;
+        }
+
+        // Optional: borderless fullscreen window (real fullscreen but without mode change)
+        if (windowOverrides.isBorderlessFullscreen)
+        {
+            flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
+        }
+
+        // Optional: always on top (debugging / overlay)
+        if (windowOverrides.alwaysOnTop)
+        {
+            flags |= SDL_WINDOW_ALWAYS_ON_TOP;
+        }
+
+        // Optional: transparent window (for overlays)
+        if (windowOverrides.transparent)
+        {
+            flags |= SDL_WINDOW_TRANSPARENT;
+        }
 
         m_window = SDL_CreateWindow(
             configuration.general.displayTitle.c_str(),
@@ -58,6 +82,9 @@ namespace Bokken
             return false;
         }
 
+        // Set minimum size to prevent layout collapse
+        SDL_SetWindowMinimumSize(m_window, 640, 480);
+
         m_renderer = SDL_CreateRenderer(m_window, NULL); // NULL picks the default driver (Metal/DirectX/Vulkan)
         if (!m_renderer)
         {
@@ -68,7 +95,11 @@ namespace Bokken
             return false;
         }
 
-        SDL_SetRenderVSync(m_renderer, 1);
+        if (windowOverrides.useVsync)
+        {
+            SDL_SetRenderVSync(m_renderer, 1);
+        }
+
         SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
 
         // Optional: apply clear colour hint via SDL surface (before a renderer is
@@ -84,9 +115,9 @@ namespace Bokken
         }
 
         // Scripting engine
-        if (!m_scripting.init(assets, scriptingEngineConfiguration.runtime.maxHeapSizeMb,
-                              scriptingEngineConfiguration.runtime.stackSizeKb,
-                              scriptingEngineConfiguration.runtime.gcThresholdKb))
+        if (!this->scriptingEngine().init(assets, scriptingEngineConfiguration.runtime.maxHeapSizeMb,
+                                          scriptingEngineConfiguration.runtime.stackSizeKb,
+                                          scriptingEngineConfiguration.runtime.gcThresholdKb))
         {
             fprintf(stderr, "[Bokken] ScriptingEngine::init() failed\n");
             SDL_DestroyWindow(m_window);
@@ -119,27 +150,26 @@ namespace Bokken
             fprintf(stderr, "[Bokken] loadBytecode() called before init()\n");
             return false;
         }
-        return m_scripting.loadBytecode(data, len, name);
+        return this->scriptingEngine().loadBytecode(data, len, name);
     }
+
     // Main loop
     void Loop::run()
     {
+        auto &engine = this->scriptingEngine();
+
         if (!m_initialised)
-        {
-            fprintf(stderr, "[Bokken] run() called before init()\n");
             return;
-        }
-        if (!m_scripting.isReady())
+
+        if (!engine.isReady())
         {
-            fprintf(stderr, "[Bokken] ScriptingEngine is not ready — did you call loadBytecode()?\n");
+            fprintf(stderr, "[Bokken] ScriptingEngine is not ready!\n");
             return;
         }
 
-        // onStart
-        m_scripting.callOnStart();
-        m_lastTick = SDL_GetTicksNS(); // reset after potentially slow onStart()
+        engine.callOnStart();
+        m_lastTick = SDL_GetTicksNS();
 
-        // Main loop
         while (!m_quit)
         {
             processEvents();
@@ -148,13 +178,14 @@ namespace Bokken
             tick();
         }
     }
+
     // Per-frame work
     void Loop::processEvents()
     {
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            Bokken::Modules::Canvas::handle_event(e);
+            Bokken::Modules::Canvas::handleEvent(e);
 
             switch (e.type)
             {
@@ -175,6 +206,8 @@ namespace Bokken
 
     void Loop::tick()
     {
+        auto &engine = this->scriptingEngine();
+
         // Delta time
         Uint64 now = SDL_GetTicksNS();
         double dt = static_cast<double>(now - m_lastTick) * 1e-9; // ns → s
@@ -188,12 +221,12 @@ namespace Bokken
         m_fixedAccum += dt;
         while (m_fixedAccum >= m_fixedStep)
         {
-            m_scripting.callOnFixedUpdate(m_fixedStep);
+            engine.callOnFixedUpdate(m_fixedStep);
             m_fixedAccum -= m_fixedStep;
         }
 
         // Variable update
-        m_scripting.callOnUpdate(dt);
+        engine.callOnUpdate(dt);
 
         Bokken::Modules::Canvas::update(static_cast<float>(dt));
 
@@ -214,10 +247,12 @@ namespace Bokken
     // Shutdown
     void Loop::shutdown()
     {
+        auto &engine = this->scriptingEngine();
+
         if (!m_initialised)
             return;
 
-        m_scripting.shutdown();
+        engine.shutdown();
 
         if (m_window)
         {

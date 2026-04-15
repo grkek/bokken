@@ -20,7 +20,10 @@
     "development": {
       "windowOverrides": {
         "isFullscreen": false,
-        "useVsync": false
+        "isBorderlessFullscreen": false,
+        "alwaysOnTop": false,
+        "transparent": false,
+        "useVsync": true
       },
       "scriptingEngine": {
         "runtime": {
@@ -42,6 +45,9 @@
     "production": {
       "windowOverrides": {
         "isFullscreen": true,
+        "isBorderlessFullscreen": true,
+        "alwaysOnTop": true,
+        "transparent": false,
         "useVsync": true
       },
       "scriptingEngine": {

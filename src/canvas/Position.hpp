@@ -6,11 +6,10 @@ namespace Bokken
 {
     namespace Canvas
     {
-        enum class Align : uint8_t
+        enum class Position : uint8_t
         {
-            Start,
-            Center,
-            End
+            Relative,
+            Absolute
         };
     }
 }

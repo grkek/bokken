@@ -126,34 +126,41 @@ namespace Bokken
             if (!m_rt)
                 return;
 
-            // Free cached hook references before freeing the context.
-            if (m_ctx)
+            // We move the pointers to local variables and set the class members to null.
+            // Now, any other thread or any lambda calling isReady() will get 'false' instantly.
+            JSContext *ctx = m_ctx;
+            JSRuntime *rt = m_rt;
+
+            m_ctx = nullptr;
+            m_rt = nullptr;
+
+            if (ctx)
             {
-                JS_FreeValue(m_ctx, m_fn_onStart);
-                JS_FreeValue(m_ctx, m_fn_onUpdate);
-                JS_FreeValue(m_ctx, m_fn_onFixedUpdate);
+                // Free cached hook references
+                JS_FreeValue(ctx, m_fn_onStart);
+                JS_FreeValue(ctx, m_fn_onUpdate);
+                JS_FreeValue(ctx, m_fn_onFixedUpdate);
 
                 m_fn_onStart = JS_UNDEFINED;
                 m_fn_onUpdate = JS_UNDEFINED;
                 m_fn_onFixedUpdate = JS_UNDEFINED;
+
+                // Let each module free its own native resources.
+                for (auto &mod : m_modules)
+                {
+                    mod->destroy();
+                }
+                
+                m_modules.clear();
+
+                JS_FreeContext(ctx);
             }
 
-            // Let each module free its own native resources.
-            for (auto &mod : m_modules)
+            if (rt)
             {
-                mod->destroy();
+                Modules::Base::unregisterRuntime(rt);
+                JS_FreeRuntime(rt);
             }
-            m_modules.clear();
-
-            if (m_ctx)
-            {
-                JS_FreeContext(m_ctx);
-                m_ctx = nullptr;
-            }
-
-            Modules::Base::unregisterRuntime(m_rt);
-            JS_FreeRuntime(m_rt);
-            m_rt = nullptr;
         }
 
         // Game-loop hooks
@@ -227,7 +234,6 @@ namespace Bokken
             JSValue str = JS_ToString(m_ctx, exc);
             const char *msg = JS_ToCString(m_ctx, str);
 
-            fprintf(stderr, "\n--- [BOKKEN JS EXCEPTION] ---\n");
             fprintf(stderr, "Context: %s\n", context.c_str());
             fprintf(stderr, "Message: %s\n", msg ? msg : "<unknown>");
 

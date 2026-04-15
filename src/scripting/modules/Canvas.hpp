@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Base.hpp"
+#include "../Engine.hpp"
+#include "../../canvas/Align.hpp"
+#include "../../canvas/Timing.hpp"
 #include "../../canvas/SimpleStyleSheet.hpp"
 #include "../../canvas/Node.hpp"
 #include "../../canvas/components/Label.hpp"
@@ -41,8 +44,15 @@ namespace Bokken
             /** Renders the current UI tree to the screen **/
             static void present();
 
+            /** Mark for re-render **/
+            static void markLabelsDirty(std::shared_ptr<Bokken::Canvas::Node> node);
+
+            /** Force a layout redraw through events **/
+            static void forceRelayout();
+
+
             /** Handles SDL events for the UI (clicks, hovers) **/
-            static void handle_event(const SDL_Event& event);
+            static void handleEvent(const SDL_Event& event);
 
         private:
             friend void drawNode(SDL_Renderer *renderer, std::shared_ptr<Bokken::Canvas::Node> node);
@@ -53,6 +63,12 @@ namespace Bokken
             /** Recursively updates animation scales (lerping) **/
             static void update_node_animations(std::shared_ptr<Bokken::Canvas::Node> node, float deltaTime);
 
+            /** Applies mathematical easing curves to a normalized time value **/
+            static float apply_easing(Bokken::Canvas::Timing func, float t);
+
+            /** Recursively clears active/pressed flags from the tree **/
+            static void reset_active_states(std::shared_ptr<Bokken::Canvas::Node> node);
+
             static inline SDL_Window *s_window = nullptr;
             static inline SDL_Renderer *s_renderer = nullptr;
             
@@ -61,12 +77,12 @@ namespace Bokken
 
             static inline std::map<std::string, TTF_Font *> s_font_cache;
 
-            // Tracking the node currently under the mouse
+            /* Tracking the node currently under the mouse */
             static inline std::shared_ptr<Bokken::Canvas::Node> s_hovered_node = nullptr;
-            // Tracking the node currently being pressed
+            /* Tracking the node currently being pressed */
             static inline std::shared_ptr<Bokken::Canvas::Node> s_pressed_node = nullptr;
 
-            // QuickJS Module Functions
+            /* QuickJS Module Functions */
             static JSValue create_element(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
             static JSValue render(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
             static JSValue use_state(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include "Configuration.hpp"
 #include "AssetPack.hpp"
@@ -68,7 +69,7 @@ namespace Bokken
          * Access the scripting engine to register native modules.
          * Call addModule() on the returned reference before loadBytecode().
          */
-        Scripting::Engine &scripting() { return m_scripting; }
+        Bokken::Scripting::Engine &scriptingEngine() { return Bokken::Scripting::Engine::Instance(); }
 
         /**
          * Enter the SDL event loop. Blocks until the window is closed or
@@ -91,7 +92,6 @@ namespace Bokken
     private:
         SDL_Window *m_window = nullptr;
         SDL_Renderer *m_renderer = nullptr;
-        Scripting::Engine m_scripting;
 
         bool m_quit = false;
         bool m_initialised = false;

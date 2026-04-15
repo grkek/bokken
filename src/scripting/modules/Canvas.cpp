@@ -15,6 +15,14 @@ namespace Bokken
             int hook_idx;
         };
 
+        struct JSCapture
+        {
+            JSContext *ctx;
+            JSValue val;
+            JSCapture(JSContext *c, JSValue v) : ctx(c), val(v) {}
+            ~JSCapture() { JS_FreeValue(ctx, val); } // Stops the QuickJS GC Segfault
+        };
+
         TTF_Font *Canvas::get_font(const std::string &path, float size)
         {
             std::string key = path + ":" + std::to_string((int)size);
@@ -150,25 +158,95 @@ namespace Bokken
                 JS_FreeValue(ctx, v);
             };
 
+            // Core Dimensions
             get_dimension("width", out.width, out.widthIsPercent);
             get_dimension("height", out.height, out.heightIsPercent);
 
-            // Standard properties
-            get_f("padding", out.padding);
+            // Box Model (Margins)
             get_f("margin", out.margin);
-            get_s("font", out.font);
-            get_f("fontSize", out.fontSize);
+            get_f("marginTop", out.marginTop);
+            get_f("marginBottom", out.marginBottom);
+            get_f("marginLeft", out.marginLeft);
+            get_f("marginRight", out.marginRight);
+
+            // Box Model (Paddings)
+            get_f("padding", out.padding);
+            get_f("paddingTop", out.paddingTop);
+            get_f("paddingBottom", out.paddingBottom);
+            get_f("paddingLeft", out.paddingLeft);
+            get_f("paddingRight", out.paddingRight);
+
+            // Positioning
+            get_f("top", out.top);
+            get_f("bottom", out.bottom);
+            get_f("left", out.left);
+            get_f("right", out.right);
+
+            JSValue zVal = JS_GetPropertyStr(ctx, style, "zIndex");
+            if (JS_IsNumber(zVal))
+            {
+                int32_t z;
+                JS_ToInt32(ctx, &z, zVal);
+                out.zIndex = z;
+            }
+            JS_FreeValue(ctx, zVal);
+
+            std::string posStr = "Relative";
+            get_s("position", posStr);
+            out.position = (posStr == "Absolute") ? Bokken::Canvas::Position::Absolute : Bokken::Canvas::Position::Relative;
+
+            // Visuals & Borders
             get_u32("backgroundColor", out.backgroundColor);
             get_u32("color", out.color);
+            get_f("opacity", out.opacity);
+            get_f("borderRadius", out.borderRadius);
+            get_f("borderWidth", out.borderWidth);
+            get_u32("borderColor", out.borderColor);
 
-            // Flex Alignment
-            std::string jContent = "start";
-            std::string aItems = "start";
+            std::string overflowStr = "Visible";
+            get_s("overflow", overflowStr);
+            out.overflow = (overflowStr == "Hidden") ? Bokken::Canvas::Overflow::Hidden : Bokken::Canvas::Overflow::Visible;
+
+            // Text
+            get_s("font", out.font);
+            get_f("fontSize", out.fontSize);
+
+            // Flex Layout
+            std::string flexDir = "Column";
+            get_s("flexDirection", flexDir);
+            out.flexDirection = (flexDir == "Row") ? Bokken::Canvas::FlexDirection::Row : Bokken::Canvas::FlexDirection::Column;
+            get_f("flex", out.flex);
+
+            std::string jContent = "Start";
+            std::string aItems = "Center";
             get_s("justifyContent", jContent);
             get_s("alignItems", aItems);
 
-            out.justifyContent = (jContent == "center") ? Bokken::Canvas::Align::Center : (jContent == "end" ? Bokken::Canvas::Align::End : Bokken::Canvas::Align::Start);
-            out.alignItems = (aItems == "center") ? Bokken::Canvas::Align::Center : (aItems == "end" ? Bokken::Canvas::Align::End : Bokken::Canvas::Align::Start);
+            out.justifyContent = (jContent == "Center") ? Bokken::Canvas::Align::Center : (jContent == "End" ? Bokken::Canvas::Align::End : Bokken::Canvas::Align::Start);
+            out.alignItems = (aItems == "Center") ? Bokken::Canvas::Align::Center : (aItems == "End" ? Bokken::Canvas::Align::End : Bokken::Canvas::Align::Start);
+
+            // Animation & Interaction
+            get_f("transitionDuration", out.transitionDuration);
+            get_f("hoverScale", out.hoverScale);
+            get_f("activeScale", out.activeScale);
+
+            std::string timingStr = "Linear";
+            get_s("transitionTiming", timingStr);
+
+            if (timingStr == "EaseIn")
+                out.transitionTiming = Bokken::Canvas::Timing::EaseIn;
+            else if (timingStr == "EaseOut")
+                out.transitionTiming = Bokken::Canvas::Timing::EaseOut;
+            else if (timingStr == "EaseInOut")
+                out.transitionTiming = Bokken::Canvas::Timing::EaseInOut;
+            else if (timingStr == "Bounce")
+                out.transitionTiming = Bokken::Canvas::Timing::Bounce;
+            else if (timingStr == "Back")
+                out.transitionTiming = Bokken::Canvas::Timing::Back;
+            else if (timingStr == "Step")
+                out.transitionTiming = Bokken::Canvas::Timing::Step;
+            else
+                out.transitionTiming = Bokken::Canvas::Timing::Linear;
         }
 
         JSValue Canvas::create_element(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
@@ -242,172 +320,190 @@ namespace Bokken
 
         std::shared_ptr<Bokken::Canvas::Node> Canvas::synchronize_tree(JSContext *ctx, JSValue val)
         {
+            auto &engine = Bokken::Scripting::Engine::Instance();
+
+            // 1. Validate 'type' property
             JSValue type = JS_GetPropertyStr(ctx, val, "type");
             if (JS_IsException(type))
+            {
                 return nullptr;
+            }
 
-            // 1. Handle functional components (React-like)
             if (JS_IsFunction(ctx, type))
             {
                 void *prev_comp = s_active_comp;
                 int prev_idx = s_hook_idx;
+
                 s_active_comp = JS_VALUE_GET_PTR(type);
                 s_hook_idx = 0;
 
                 JSValue properties = JS_GetPropertyStr(ctx, val, "properties");
                 JSValue result = JS_Call(ctx, type, JS_UNDEFINED, 1, &properties);
 
+                if (JS_IsException(result))
+                {
+                    engine.reportException("Unable to synchronize a functional component");
+                    JS_FreeValue(ctx, properties);
+                    JS_FreeValue(ctx, type);
+                    return nullptr;
+                }
+
+                // Recursively build the tree from the component's output
                 auto node = synchronize_tree(ctx, result);
 
                 JS_FreeValue(ctx, properties);
                 JS_FreeValue(ctx, result);
                 JS_FreeValue(ctx, type);
+
                 s_active_comp = prev_comp;
                 s_hook_idx = prev_idx;
                 return node;
             }
 
-            // 2. Extract primitive metadata
             const char *tStr = JS_ToCString(ctx, type);
-            std::string typeName = tStr ? tStr : "Unknown";
+            std::string typeName = tStr ? tStr : "View";
             JS_FreeCString(ctx, tStr);
             JS_FreeValue(ctx, type);
 
-            Bokken::Canvas::SimpleStyleSheet extractedStyle;
-            std::string extractedText = "";
-            std::vector<std::shared_ptr<Bokken::Canvas::Node>> childrenNodes;
-
-            // We store this temporarily until the node is instantiated
-            JSValue jsOnClick = JS_UNDEFINED;
-
+            auto node = std::make_shared<Bokken::Canvas::Node>(typeName);
             JSValue properties = JS_GetPropertyStr(ctx, val, "properties");
-            if (JS_IsObject(properties))
+
+            // Exit early if no properties exist
+            if (!JS_IsObject(properties))
             {
-                // Parse Style
-                JSValue style = JS_GetPropertyStr(ctx, properties, "style");
-                parse_simple_style_sheet(ctx, style, extractedStyle);
-                JS_FreeValue(ctx, style);
-
-                // Capture onClick but don't bind yet
-                jsOnClick = JS_GetPropertyStr(ctx, properties, "onClick");
-
-                // Parse Children/Text
-                JSValue children = JS_GetPropertyStr(ctx, properties, "children");
-                if (typeName == "Label")
-                {
-                    // If it's a Label, we flatten all children into one string (allows "Count: {count}")
-                    if (JS_IsString(children) || JS_IsNumber(children))
-                    {
-                        const char *text = JS_ToCString(ctx, children);
-                        extractedText = text ? text : "";
-                        JS_FreeCString(ctx, text);
-                    }
-                    else if (JS_IsArray(children))
-                    {
-                        uint32_t len = 0;
-                        JSValue jsLen = JS_GetPropertyStr(ctx, children, "length");
-                        JS_ToUint32(ctx, &len, jsLen);
-                        JS_FreeValue(ctx, jsLen);
-
-                        std::string flattened;
-                        for (uint32_t i = 0; i < len; i++)
-                        {
-                            JSValue c = JS_GetPropertyUint32(ctx, children, i);
-                            const char *text = JS_ToCString(ctx, c);
-                            if (text)
-                                flattened += text;
-                            JS_FreeCString(ctx, text);
-                            JS_FreeValue(ctx, c);
-                        }
-                        extractedText = flattened;
-                    }
-                }
-                else // It's a View or other container
-                {
-                    if (JS_IsArray(children))
-                    {
-                        uint32_t len = 0;
-                        JSValue jsLen = JS_GetPropertyStr(ctx, children, "length");
-                        JS_ToUint32(ctx, &len, jsLen);
-                        JS_FreeValue(ctx, jsLen);
-
-                        for (uint32_t i = 0; i < len; i++)
-                        {
-                            JSValue c = JS_GetPropertyUint32(ctx, children, i);
-                            if (JS_IsObject(c))
-                            {
-                                auto childNode = synchronize_tree(ctx, c);
-                                if (childNode)
-                                    childrenNodes.push_back(childNode);
-                            }
-                            JS_FreeValue(ctx, c);
-                        }
-                    }
-                }
-                JS_FreeValue(ctx, children);
+                JS_FreeValue(ctx, properties);
+                return node;
             }
 
-            // 3. Create the concrete Node instance
-            std::shared_ptr<Bokken::Canvas::Node> node = nullptr;
+            // 2. Parse Styles
+            JSValue style = JS_GetPropertyStr(ctx, properties, "style");
+            parse_simple_style_sheet(ctx, style, node->style);
+            JS_FreeValue(ctx, style);
+
+            // 3. Process Children
+            JSValue children = JS_GetPropertyStr(ctx, properties, "children");
 
             if (typeName == "Label")
             {
-                Bokken::Canvas::Components::Label labelComponent(extractedText);
-                labelComponent.setStyle(extractedStyle);
-                node = labelComponent.toNode();
-            }
-            else if (typeName == "View")
-            {
-                Bokken::Canvas::Components::View viewComponent;
-                viewComponent.setStyle(extractedStyle);
-                for (auto &child : childrenNodes)
+                // Handle text content for Labels
+                if (JS_IsString(children) || JS_IsNumber(children) || JS_IsBool(children))
                 {
-                    viewComponent.addChild(child);
+                    JSValue strVal = JS_ToString(ctx, children);
+                    if (!JS_IsException(strVal))
+                    {
+                        const char *text = JS_ToCString(ctx, strVal);
+                        node->textContent = text ? text : "";
+                        JS_FreeCString(ctx, text);
+                    }
+                    JS_FreeValue(ctx, strVal);
                 }
-                node = viewComponent.toNode();
-            }
-            else
-            {
-                // Fallback for generic nodes
-                node = std::make_shared<Bokken::Canvas::Node>(typeName);
-                node->style = extractedStyle;
-                node->textContent = extractedText;
-                node->children = childrenNodes;
-            }
+                else if (JS_IsArray(children))
+                {
+                    uint32_t len = 0;
+                    JSValue jsLen = JS_GetPropertyStr(ctx, children, "length");
+                    JS_ToUint32(ctx, &len, jsLen);
+                    JS_FreeValue(ctx, jsLen);
 
-            // 4. Bind Interactions (Now that 'node' is guaranteed to exist)
+                    std::string flattened = "";
+
+                    for (uint32_t i = 0; i < len; i++)
+                    {
+                        JSValue c = JS_GetPropertyUint32(ctx, children, i);
+
+                        // Convert ANY JS value → string safely
+                        JSValue strVal = JS_ToString(ctx, c);
+                        if (!JS_IsException(strVal))
+                        {
+                            const char *text = JS_ToCString(ctx, strVal);
+                            if (text)
+                            {
+                                flattened += text;
+                                JS_FreeCString(ctx, text);
+                            }
+                        }
+
+                        JS_FreeValue(ctx, strVal);
+                        JS_FreeValue(ctx, c);
+                    }
+
+                    node->textContent = flattened;
+                }
+            }
+            else if (JS_IsArray(children))
+            {
+                // Recursively add children for non-label nodes
+                uint32_t len = 0;
+                JSValue jsLen = JS_GetPropertyStr(ctx, children, "length");
+                JS_ToUint32(ctx, &len, jsLen);
+                JS_FreeValue(ctx, jsLen);
+
+                for (uint32_t i = 0; i < len; i++)
+                {
+                    JSValue c = JS_GetPropertyUint32(ctx, children, i);
+                    if (JS_IsObject(c))
+                    {
+                        auto childNode = synchronize_tree(ctx, c);
+                        if (childNode)
+                            node->add_child(childNode);
+                    }
+                    JS_FreeValue(ctx, c);
+                }
+            }
+            JS_FreeValue(ctx, children);
+
+            // 4. Bind Events (onClick)
+            JSValue jsOnClick = JS_GetPropertyStr(ctx, properties, "onClick");
             if (JS_IsFunction(ctx, jsOnClick))
             {
-                // Increase the reference count so JS doesn't delete this while C++ holds it
-                JSValue capturedFunction = JS_DupValue(ctx, jsOnClick);
+                // Reference count increment to keep the function alive in JS heap
+                JSValue capturedVal = JS_DupValue(ctx, jsOnClick);
 
-                node->onClick = [ctx, capturedFunction]()
+                // NATIVE LAMBDA: Triggers when the user interacts with the C++ Node
+                node->onClick = [capturedVal]()
                 {
-                    // Trigger the JS function!
-                    JSValue ret = JS_Call(ctx, capturedFunction, JS_UNDEFINED, 0, nullptr);
-
-                    // Handle potential JS errors (very helpful for debugging!)
-                    if (JS_IsException(ret))
+                    auto &engine = Bokken::Scripting::Engine::Instance();
+                    if (!engine.isReady())
                     {
-                        JSValue exception = JS_GetException(ctx);
-                        const char *str = JS_ToCString(ctx, exception);
-                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[JS Error] %s", str);
-                        JS_FreeCString(ctx, str);
-                        JS_FreeValue(ctx, exception);
+                        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Bokken Warning: onClick skipped because Engine is NOT ready!");
+                        return;
                     }
-                    JS_FreeValue(ctx, ret);
+
+                    if (engine.isReady())
+                    {
+                        JSContext *liveCtx = engine.context();
+                        JSValue ret = JS_Call(liveCtx, capturedVal, JS_UNDEFINED, 0, nullptr);
+
+                        if (JS_IsException(ret))
+                        {
+                            engine.reportException("onClick Handler");
+                        }
+                        JS_FreeValue(liveCtx, ret);
+                    }
                 };
 
-                // Important: decrement ref count when C++ node is destroyed to prevent leaks
-                node->onDeconstruct = [ctx, capturedFunction]()
+                node->onDeconstruct = [capturedVal]()
                 {
-                    JS_FreeValue(ctx, capturedFunction);
+                    auto &engine = Bokken::Scripting::Engine::Instance();
+                    if (engine.isReady())
+                    {
+                        JS_FreeValue(engine.context(), capturedVal);
+                    }
                 };
             }
 
-            // Cleanup local handles
+            // Cleanup and return
             JS_FreeValue(ctx, jsOnClick);
             JS_FreeValue(ctx, properties);
+
+            if (typeName == "View")
+            {
+                node->onCompute = &Bokken::Canvas::Components::View::computeNode;
+                node->onLayout = &Bokken::Canvas::Components::View::layoutNode;
+            }
+            else if (typeName == "Label")
+            {
+                node->onCompute = &Bokken::Canvas::Components::Label::computeNode;
+            }
 
             return node;
         }
@@ -432,69 +528,150 @@ namespace Bokken
             }
         }
 
-        std::shared_ptr<Bokken::Canvas::Node> Canvas::find_node_at(std::shared_ptr<Bokken::Canvas::Node> root, float mx, float my)
+        std::shared_ptr<Bokken::Canvas::Node> Canvas::find_node_at(std::shared_ptr<Bokken::Canvas::Node> root, float x, float y)
         {
             if (!root)
                 return nullptr;
 
-            // Search children in reverse order (top to bottom)
+            /* 1. Search children first (Deepest/Top-most elements) */
             for (auto it = root->children.rbegin(); it != root->children.rend(); ++it)
             {
-                auto hit = find_node_at(*it, mx, my);
+                auto hit = find_node_at(*it, x, y);
                 if (hit)
                     return hit;
             }
 
-            // Check self
-            if (mx >= root->layout.x && mx <= root->layout.x + root->layout.w &&
-                my >= root->layout.y && my <= root->layout.y + root->layout.h)
+            /* 2. Check if the point is within this specific node's box */
+            bool isInside = (x >= root->layout.x && (x <= root->layout.x + root->layout.w) &&
+                             y >= root->layout.y && (y <= root->layout.y + root->layout.h));
+
+            if (isInside)
             {
-                return root;
+                /* 3. Bubble up: Find the responsible 'Interactive' ancestor */
+                // We start with a shared_ptr to the current leaf node
+                std::shared_ptr<Bokken::Canvas::Node> current = root;
+
+                while (current)
+                {
+                    if (current->onClick != nullptr)
+                    {
+                        return current; /* Found the actual button owner */
+                    }
+
+                    /* Move up the chain using the raw parent pointer */
+                    if (current->parent)
+                    {
+                        /* We wrap the raw parent pointer into a temporary shared_ptr.
+                           The no-op deleter '[](Bokken::Canvas::Node*){}' is CRITICAL here
+                           because the parent is owned by its own parent/the tree,
+                           not by this temporary pointer. */
+                        current = std::shared_ptr<Bokken::Canvas::Node>(current->parent, [](Bokken::Canvas::Node *) {});
+                    }
+                    else
+                    {
+                        current = nullptr;
+                    }
+                }
             }
 
+            /* No interactive ancestor found */
             return nullptr;
         }
 
-        void Canvas::handle_event(const SDL_Event &event)
+        void Canvas::markLabelsDirty(std::shared_ptr<Bokken::Canvas::Node> node)
+        {
+            if (!node)
+                return;
+            if (node->type == "Label")
+                node->needsRepaint = true;
+            for (auto &child : node->children)
+                markLabelsDirty(child);
+        }
+
+        void Canvas::forceRelayout()
         {
             if (!s_current_tree)
                 return;
 
-            float mx, my;
-            SDL_GetMouseState(&mx, &my);
-            auto hit = find_node_at(s_current_tree, mx, my);
+            markLabelsDirty(s_current_tree);
 
-            if (event.type == SDL_EVENT_MOUSE_MOTION)
+            int w, h;
+
+            SDL_GetWindowSize(s_window, &w, &h);
+
+            s_current_tree->compute(0, 0, (float)w, (float)h, s_assets);
+
+            if (s_current_tree->onLayout)
+                s_current_tree->onLayout(s_current_tree);
+        }
+
+        void Canvas::handleEvent(const SDL_Event &e)
+        {
+            if (!s_current_tree)
+                return;
+
+            if (e.type == SDL_EVENT_WINDOW_RESIZED ||
+                e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
+                e.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED)
             {
+                forceRelayout();
+                return;
+            }
+
+            if (e.type == SDL_EVENT_WINDOW_MOUSE_LEAVE)
+            {
+                if (s_hovered_node)
+                    s_hovered_node->isHovered = false;
+
+                s_hovered_node = nullptr;
+            }
+
+            if (e.type == SDL_EVENT_MOUSE_MOTION)
+            {
+                auto hit = find_node_at(s_current_tree, e.motion.x, e.motion.y);
+
                 if (hit != s_hovered_node)
                 {
-                    if (s_hovered_node && s_hovered_node->onMouseLeave)
-                        s_hovered_node->onMouseLeave();
-                    if (hit && hit->onMouseEnter)
-                        hit->onMouseEnter();
+                    if (s_hovered_node)
+                        s_hovered_node->isHovered = false;
                     s_hovered_node = hit;
+                    if (s_hovered_node)
+                        s_hovered_node->isHovered = true;
                 }
             }
-            else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
             {
-                if (hit)
-                {
-                    s_pressed_node = hit;
-                    // Animation: target a smaller scale for the "squish"
-                    hit->targetScale = 0.92f;
-                }
-            }
-            else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
-            {
+                s_pressed_node = find_node_at(s_current_tree, e.button.x, e.button.y);
                 if (s_pressed_node)
+                    s_pressed_node->isActive = true;
+            }
+
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
+            {
+                auto hit = find_node_at(s_current_tree, e.button.x, e.button.y);
+
+                std::shared_ptr<Bokken::Canvas::Node> keeper = hit;
+
+                if (keeper && keeper == s_pressed_node)
                 {
-                    s_pressed_node->targetScale = 1.0f; // Return to normal size
-                    if (hit == s_pressed_node && s_pressed_node->onClick)
+                    if (keeper->onClick)
                     {
-                        s_pressed_node->onClick();
+                        keeper->onClick();
                     }
-                    s_pressed_node = nullptr;
                 }
+
+                if (s_pressed_node)
+                    s_pressed_node->isActive = false;
+                s_pressed_node = nullptr;
+
+                if (s_hovered_node)
+                    s_hovered_node->isHovered = false;
+                s_hovered_node = nullptr;
+
+                s_hovered_node = find_node_at(s_current_tree, e.button.x, e.button.y);
+                if (s_hovered_node)
+                    s_hovered_node->isHovered = true;
             }
         }
 
@@ -503,20 +680,97 @@ namespace Bokken
             if (!node)
                 return;
 
-            // Linear Interpolation (Lerp) for the "Squish" effect
-            // 15.0f is the speed. Higher = snappier, Lower = floatier.
-            float speed = 15.0f * deltaTime;
+            // 1. Determine the target scale for this node
+            float goal = 1.0f;
 
-            // Move visualScale toward targetScale
-            node->visualScale += (node->targetScale - node->visualScale) * speed;
-
-            // If the scale is changing, we should mark it for repaint if using complex shaders,
-            // though for simple scaling, SDL_RenderTexture handles it every frame anyway.
-
-            // Recurse through children
-            for (auto &child : node->children)
+            // We check for onClick to see if it's an interactive component (Button/View)
+            if (node->onClick != nullptr)
             {
-                update_node_animations(child, deltaTime);
+                if (node->isActive)
+                    goal = node->style.activeScale;
+                else if (node->isHovered)
+                    goal = node->style.hoverScale;
+                else
+                    goal = 1.0f;
+            }
+            else if (node->parent != nullptr)
+            {
+                // SAFETY: Only inherit from parent if the parent is actually still part
+                // of the active tree. Since parent is a raw pointer, this is a risk.
+                // We assume here that parent is managed by the shared_ptr of the tree.
+                goal = node->parent->visualScale;
+            }
+
+            // 2. Detect Change: If the goal changed, reset the lerp start point
+            if (std::abs(goal - node->targetScale) > 0.001f)
+            {
+                node->startScale = node->visualScale;
+                node->targetScale = goal;
+                node->animationTimer = 0.0f;
+            }
+
+            // 3. Process the Animation Lerp
+            if (node->style.transitionDuration <= 0.0f)
+            {
+                node->visualScale = node->targetScale;
+            }
+            else if (node->animationTimer < 1.0f)
+            {
+                // Prevent division by zero just in case
+                float duration = std::max(node->style.transitionDuration, 0.0001f);
+                node->animationTimer += deltaTime / duration;
+
+                if (node->animationTimer > 1.0f)
+                    node->animationTimer = 1.0f;
+
+                float t = apply_easing(node->style.transitionTiming, node->animationTimer);
+                node->visualScale = node->startScale + (node->targetScale - node->startScale) * t;
+            }
+            else
+            {
+                // Ensure we snap to exact target when timer finishes
+                node->visualScale = node->targetScale;
+            }
+
+            // 4. Recursive Pass: Update children
+            // Using a local copy of children or standard iterator to ensure
+            // we don't crash if the tree is modified during the walk.
+            for (const auto &child : node->children)
+            {
+                if (child)
+                {
+                    update_node_animations(child, deltaTime);
+                }
+            }
+        }
+
+        void Canvas::reset_active_states(std::shared_ptr<Bokken::Canvas::Node> node)
+        {
+            if (!node)
+                return;
+            node->isActive = false;
+            for (auto &child : node->children)
+                reset_active_states(child);
+        }
+
+        float Canvas::apply_easing(Bokken::Canvas::Timing func, float t)
+        {
+            switch (func)
+            {
+            case Bokken::Canvas::Timing::EaseIn:
+                return t * t; /* Quadratic */
+            case Bokken::Canvas::Timing::EaseOut:
+                return t * (2 - t);
+            case Bokken::Canvas::Timing::EaseInOut:
+                return t < 0.5f ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            case Bokken::Canvas::Timing::Bounce:
+                /* Quick & dirty bounce */
+                if (t < (1 / 2.75f))
+                    return 7.5625f * t * t;
+                return 1.0f; /* simplified */
+            case Bokken::Canvas::Timing::Linear:
+            default:
+                return t;
             }
         }
 
@@ -528,65 +782,44 @@ namespace Bokken
             int drawW, drawH;
             SDL_GetRenderOutputSize(s_renderer, &drawW, &drawH);
 
-            s_current_tree->layout.x = 0;
-            s_current_tree->layout.y = 0;
-            s_current_tree->layout.w = static_cast<float>(drawW);
-            s_current_tree->layout.h = static_cast<float>(drawH);
-
-            if (s_current_tree->onCompute)
-                s_current_tree->onCompute(s_current_tree, s_assets);
-
-            if (s_current_tree->onLayout)
-                s_current_tree->onLayout(s_current_tree);
-
             SDL_SetRenderDrawBlendMode(s_renderer, SDL_BLENDMODE_BLEND);
             drawNode(s_renderer, s_current_tree);
         }
 
         void Canvas::update(float deltaTime)
         {
-            if (s_current_tree)
+            auto tree = s_current_tree;
+
+            if (tree)
             {
-                update_node_animations(s_current_tree, deltaTime);
+                update_node_animations(tree, deltaTime);
             }
         }
 
         JSValue Canvas::render(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
         {
-            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "[Canvas] Rendering the tree");
             if (argc < 1)
                 return JS_UNDEFINED;
 
-            // Update the JS reference to the root element
-            if (JS_VALUE_GET_PTR(s_root_element) != JS_VALUE_GET_PTR(argv[0]))
-            {
-                JS_FreeValue(ctx, s_root_element);
-                s_root_element = JS_DupValue(ctx, argv[0]);
-            }
+            s_hovered_node = nullptr;
+            s_pressed_node = nullptr;
 
-            // Build/Update the C++ tree
-            s_current_tree = synchronize_tree(ctx, s_root_element);
+            JSValue nextRoot = JS_DupValue(ctx, argv[0]);
+            JS_FreeValue(ctx, s_root_element);
+            s_root_element = nextRoot;
+
+            auto new_tree = synchronize_tree(ctx, s_root_element);
+            s_current_tree = new_tree;
 
             if (s_current_tree)
             {
-                int w = 0, h = 0;
-                if (s_window)
-                {
-                    SDL_GetWindowSize(s_window, &w, &h);
-                }
+                int w, h;
+                SDL_GetWindowSize(s_window, &w, &h);
 
-                // Ensure we don't pass 0 or negative values which might cause div-by-zero
-                float targetW = (w > 0) ? (float)w : 800.0f;
-                float targetH = (h > 0) ? (float)h : 600.0f;
+                s_current_tree->compute(0, 0, (float)w, (float)h, s_assets);
 
-                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "[Canvas] Computing layout for size: %.2f x %.2f", targetW, targetH);
-
-                // Start with clean 0.0 floats
-                s_current_tree->compute(0.0f, 0.0f, targetW, targetH, s_assets);
-            }
-            else
-            {
-                SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "[Canvas] Unable to synchronize the tree");
+                if (s_current_tree->onLayout)
+                    s_current_tree->onLayout(s_current_tree);
             }
 
             return JS_UNDEFINED;
@@ -596,9 +829,15 @@ namespace Bokken
         {
             JS_AddModuleExport(ctx, m, "default");
             JS_AddModuleExport(ctx, m, "useState");
+
             JS_AddModuleExport(ctx, m, "Align");
-            JS_AddModuleExport(ctx, m, "View");
+            JS_AddModuleExport(ctx, m, "FlexDirection");
             JS_AddModuleExport(ctx, m, "Label");
+            JS_AddModuleExport(ctx, m, "Overflow");
+            JS_AddModuleExport(ctx, m, "Position");
+            JS_AddModuleExport(ctx, m, "Timing");
+            JS_AddModuleExport(ctx, m, "View");
+
             return 0;
         }
 
@@ -615,15 +854,45 @@ namespace Bokken
             // Align enum
             JSValue align = JS_NewObject(ctx);
 
-            JS_SetPropertyStr(ctx, align, "start", JS_NewString(ctx, "start"));
-            JS_SetPropertyStr(ctx, align, "center", JS_NewString(ctx, "center"));
-            JS_SetPropertyStr(ctx, align, "end", JS_NewString(ctx, "end"));
+            JS_SetPropertyStr(ctx, align, "Start", JS_NewString(ctx, "Start"));
+            JS_SetPropertyStr(ctx, align, "Center", JS_NewString(ctx, "Center"));
+            JS_SetPropertyStr(ctx, align, "End", JS_NewString(ctx, "End"));
+
+            // FlexDirection enum
+            JSValue flexDirection = JS_NewObject(ctx);
+
+            JS_SetPropertyStr(ctx, flexDirection, "Row", JS_NewString(ctx, "Row"));
+            JS_SetPropertyStr(ctx, flexDirection, "Column", JS_NewString(ctx, "Column"));
+
+            // Overflow enum
+            JSValue overflow = JS_NewObject(ctx);
+
+            JS_SetPropertyStr(ctx, overflow, "Visible", JS_NewString(ctx, "Visible"));
+            JS_SetPropertyStr(ctx, overflow, "Hidden", JS_NewString(ctx, "Hidden"));
+
+            // Position enum
+            JSValue position = JS_NewObject(ctx);
+
+            JS_SetPropertyStr(ctx, position, "Relative", JS_NewString(ctx, "Relative"));
+            JS_SetPropertyStr(ctx, position, "Absolute", JS_NewString(ctx, "Absolute"));
+
+            // Timing enum
+            JSValue timing = JS_NewObject(ctx);
+
+            JS_SetPropertyStr(ctx, timing, "Linear", JS_NewString(ctx, "Linear"));
+            JS_SetPropertyStr(ctx, timing, "EaseIn", JS_NewString(ctx, "EaseIn"));
+            JS_SetPropertyStr(ctx, timing, "EaseOut", JS_NewString(ctx, "EaseOut"));
+            JS_SetPropertyStr(ctx, timing, "Bounce", JS_NewString(ctx, "Bounce"));
 
             JS_SetModuleExport(ctx, m, "Align", align);
-            JS_SetModuleExport(ctx, m, "View", JS_NewString(ctx, "View"));
-            JS_SetModuleExport(ctx, m, "Label", JS_NewString(ctx, "Label"));
-            JS_SetModuleExport(ctx, m, "useState", JS_NewCFunction(ctx, use_state, "useState", 1));
             JS_SetModuleExport(ctx, m, "default", defaultExport);
+            JS_SetModuleExport(ctx, m, "FlexDirection", flexDirection);
+            JS_SetModuleExport(ctx, m, "Label", JS_NewString(ctx, "Label"));
+            JS_SetModuleExport(ctx, m, "Overflow", overflow);
+            JS_SetModuleExport(ctx, m, "Position", position);
+            JS_SetModuleExport(ctx, m, "Timing", timing);
+            JS_SetModuleExport(ctx, m, "useState", JS_NewCFunction(ctx, use_state, "useState", 1));
+            JS_SetModuleExport(ctx, m, "View", JS_NewString(ctx, "View"));
 
             return 0;
         }

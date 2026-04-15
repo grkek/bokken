@@ -7,9 +7,17 @@ namespace Bokken
         namespace Components
         {
 
-            TTF_Font *Label::get_font(const std::string &path, float size, Bokken::AssetPack *assets)
+            TTF_Font *Label::get_font(const std::string &path, float size, Bokken::AssetPack *assets, SDL_Renderer *renderer)
             {
-                std::string key = path + ":" + std::to_string((int)size);
+                // Get DPI scale — defaults to 1.0 if renderer is null
+                float scaleX = 1.0f, scaleY = 1.0f;
+                if (renderer)
+                    SDL_GetRenderScale(renderer, &scaleX, &scaleY);
+
+                float scaledSize = size * scaleX;
+
+                // Cache key now includes the scaled size to avoid HiDPI collisions
+                std::string key = path + ":" + std::to_string((int)scaledSize);
                 if (s_font_cache.count(key))
                     return s_font_cache[key];
 
@@ -32,7 +40,8 @@ namespace Bokken
                 SDL_IOStream *stream = assets->openIOStream(targetPath);
                 if (stream)
                 {
-                    TTF_Font *font = TTF_OpenFontIO(stream, true, size);
+                    // Load at physical pixel size, not logical size
+                    TTF_Font *font = TTF_OpenFontIO(stream, true, scaledSize);
                     if (font)
                     {
                         s_font_cache[key] = font;
@@ -52,64 +61,41 @@ namespace Bokken
                 s_font_cache.clear();
             }
 
+            void Label::computeNode(std::shared_ptr<Bokken::Canvas::Node> node, Bokken::AssetPack *assets)
+            {
+                const auto &s = node->style;
+                float fSize = s.fontSize > 0.f ? s.fontSize : 16.f;
+
+                // Pass nullptr for renderer — no scale at compute time, layout stays in logical pixels
+                TTF_Font *font = Label::get_font(s.font, fSize, assets, nullptr);
+                if (!font)
+                    return;
+
+                int textW, textH;
+                if (TTF_GetStringSize(font, node->textContent.c_str(), 0, &textW, &textH))
+                {
+                    float pT = (s.paddingTop != 0) ? s.paddingTop : s.padding;
+                    float pB = (s.paddingBottom != 0) ? s.paddingBottom : s.padding;
+                    float pL = (s.paddingLeft != 0) ? s.paddingLeft : s.padding;
+                    float pR = (s.paddingRight != 0) ? s.paddingRight : s.padding;
+
+                    if (s.width <= 0 && !s.widthIsPercent)
+                        node->layout.w = (float)textW + pL + pR;
+                    if (s.height <= 0 && !s.heightIsPercent)
+                        node->layout.h = (float)textH + pT + pB;
+                }
+            }
+
+            void Label::layoutNode(std::shared_ptr<Bokken::Canvas::Node> node) {}
+
             std::shared_ptr<Bokken::Canvas::Node> Label::toNode()
             {
                 auto node = std::make_shared<Bokken::Canvas::Node>("Label");
                 node->textContent = m_text;
                 node->style = m_style;
 
-                // We determine the intrinsic size of the text based on the font.
-                node->onCompute = [](std::shared_ptr<Bokken::Canvas::Node> n, Bokken::AssetPack *a)
-                {
-                    float fSize = n->style.fontSize > 0.f ? n->style.fontSize : 16.f;
-                    TTF_Font *font = Bokken::Canvas::Components::Label::get_font(n->style.font, fSize, a);
-
-                    if (font)
-                    {
-                        int w, h;
-                        if (TTF_GetStringSize(font, n->textContent.c_str(), 0, &w, &h))
-                        {
-                            float textW = (float)w;
-                            float textH = (float)h;
-
-                            // Resolve Width: Percent > Fixed > Content
-                            if (n->style.widthIsPercent)
-                            {
-                                n->layout.w = n->layout.w * (n->style.width / 100.0f);
-                            }
-                            else if (n->style.width > 0)
-                            {
-                                n->layout.w = n->style.width;
-                            }
-                            else
-                            {
-                                n->layout.w = textW;
-                            }
-
-                            // Resolve Height: Percent > Fixed > Content
-                            if (n->style.heightIsPercent)
-                            {
-                                n->layout.h = n->layout.h * (n->style.height / 100.0f);
-                            }
-                            else if (n->style.height > 0)
-                            {
-                                n->layout.h = n->style.height;
-                            }
-                            else
-                            {
-                                n->layout.h = textH;
-                            }
-                        }
-                    }
-                };
-
-                // For a Label, we don't have children to position, but we should
-                // handle any internal offset logic here if we ever add padding/margins.
-                node->onLayout = [](std::shared_ptr<Bokken::Canvas::Node> n)
-                {
-                    // Labels are usually leaf nodes, so we just finish the pass here.
-                    // If we ever support inline icons inside Labels, we'd position them here.
-                };
+                node->onCompute = &computeNode;
+                node->onLayout = &layoutNode;
 
                 return node;
             }
@@ -119,56 +105,91 @@ namespace Bokken
                 if (!renderer || !node || node->textContent.empty())
                     return;
 
-                // 1. Use the Cache: If texture is valid and we don't need a repaint, just blit and leave.
-                if (!node->needsRepaint && node->texture != nullptr)
+                const auto &s = node->style;
+
+                // 1. Resolve Padding
+                float pT = (s.paddingTop != 0) ? s.paddingTop : s.padding;
+                float pL = (s.paddingLeft != 0) ? s.paddingLeft : s.padding;
+                float pR = (s.paddingRight != 0) ? s.paddingRight : s.padding;
+                float pB = (s.paddingBottom != 0) ? s.paddingBottom : s.padding;
+
+                // 2. Get render scale for HiDPI compensation
+                float scaleX = 1.0f, scaleY = 1.0f;
+                SDL_GetRenderScale(renderer, &scaleX, &scaleY);
+
+                // 3. Texture Management
+                if (node->needsRepaint || node->texture == nullptr)
                 {
-                    SDL_FRect rect = {node->layout.x, node->layout.y, node->layout.w, node->layout.h};
-                    SDL_RenderTexture(renderer, node->texture, nullptr, &rect);
-                    return;
-                }
+                    if (node->texture)
+                        SDL_DestroyTexture(node->texture);
 
-                // 2. Dirty/New Texture Path: Clean up old texture if it exists
-                if (node->texture)
-                {
-                    SDL_DestroyTexture(node->texture);
-                    node->texture = nullptr;
-                }
+                    float fSize = s.fontSize > 0.f ? s.fontSize : 16.f;
 
-                // 3. Render new Surface (Software)
-                float fSize = node->style.fontSize > 0.f ? node->style.fontSize : 16.f;
-                TTF_Font *font = get_font(node->style.font, fSize, assets);
+                    // Pass renderer so font is loaded at physical (scaled) size
+                    TTF_Font *font = get_font(s.font, fSize, assets, renderer);
+                    if (!font)
+                        return;
 
-                if (!font)
-                {
-                    SDL_LogError(SDL_LOG_CATEGORY_VIDEO, "[Label Draw] Font is NULL for text: %s", node->textContent.c_str());
-                    return;
-                }
+                    SDL_Color textColor = {
+                        static_cast<Uint8>((s.color >> 24) & 0xFF),
+                        static_cast<Uint8>((s.color >> 16) & 0xFF),
+                        static_cast<Uint8>((s.color >> 8) & 0xFF),
+                        static_cast<Uint8>(s.color & 0xFF)};
 
-                SDL_Color white = {255, 255, 255, 255};
-                SDL_Surface *surface = TTF_RenderText_Blended(font, node->textContent.c_str(), 0, white);
-                if (!surface)
-                {
-                    SDL_LogError(SDL_LOG_CATEGORY_VIDEO, "[Label Draw] Surface creation failed: %s", SDL_GetError());
-                    return;
-                }
-
-                // 4. Create new Texture (Upload to GPU)
-                node->texture = SDL_CreateTextureFromSurface(renderer, surface);
-                SDL_DestroySurface(surface); // Clean up surface immediately after texture creation
-
-                // 5. Final Render
-                if (node->texture)
-                {
-                    node->needsRepaint = false; // Mark as clean so we don't do this again!
-
-                    SDL_FRect rect = {node->layout.x, node->layout.y, node->layout.w, node->layout.h};
-
-                    if (rect.w <= 0 || rect.h <= 0)
+                    SDL_Surface *surface = TTF_RenderText_Blended(font, node->textContent.c_str(), 0, textColor);
+                    if (surface)
                     {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_VIDEO, "[Label Draw] Zero size detected for: %s", node->textContent.c_str());
+                        node->texture = SDL_CreateTextureFromSurface(renderer, surface);
+                        SDL_DestroySurface(surface);
+                        node->needsRepaint = false;
+                    }
+                }
+
+                if (node->texture)
+                {
+                    float texW, texH;
+                    SDL_GetTextureSize(node->texture, &texW, &texH);
+
+                    // Convert physical texture size back to logical pixels for layout math
+                    float logicalW = texW / scaleX;
+                    float logicalH = texH / scaleY;
+
+                    SDL_FRect drawRect = {node->layout.x, node->layout.y, logicalW, logicalH};
+
+                    // 4. Horizontal Alignment
+                    if (s.width > 0 || s.widthIsPercent)
+                    {
+                        if (s.alignItems == Align::Center)
+                            drawRect.x = node->layout.x + (node->layout.w - logicalW) * 0.5f;
+                        else if (s.alignItems == Align::End)
+                            drawRect.x = node->layout.x + node->layout.w - logicalW - pR;
+                        else
+                            drawRect.x += pL;
+                    }
+                    else
+                    {
+                        drawRect.x += pL;
                     }
 
-                    SDL_RenderTexture(renderer, node->texture, nullptr, &rect);
+                    // 5. Vertical Alignment
+                    if (s.height > 0 || s.heightIsPercent)
+                        drawRect.y = node->layout.y + (node->layout.h - logicalH) * 0.5f;
+                    else
+                        drawRect.y += pT;
+
+                    // 6. Apply Visual Scale (hover/active animations)
+                    if (node->visualScale != 1.0f)
+                    {
+                        float cx = drawRect.x + logicalW * 0.5f;
+                        float cy = drawRect.y + logicalH * 0.5f;
+                        drawRect.w *= node->visualScale;
+                        drawRect.h *= node->visualScale;
+                        drawRect.x = cx - drawRect.w * 0.5f;
+                        drawRect.y = cy - drawRect.h * 0.5f;
+                    }
+
+                    SDL_SetTextureAlphaMod(node->texture, static_cast<Uint8>(s.opacity * 255));
+                    SDL_RenderTexture(renderer, node->texture, nullptr, &drawRect);
                 }
             }
         }

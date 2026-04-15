@@ -1,7 +1,53 @@
+/* The alignment of items along the container's main or cross axis. */
 export enum Align {
-    'start',
-    'center',
-    'end'
+    /* Align items to the beginning of the container */
+    Start = "Start",
+    /* Align items to the center of the container */
+    Center = "Center",
+    /* Align items to the end of the container */
+    End = "End"
+}
+
+/* Mathematical curves for transition animations. */
+export enum Timing {
+    /* Constant speed from start to end */
+    Linear = "Linear",
+    /* Starts slow and accelerates at the end */
+    EaseIn = "EaseIn",
+    /* Starts fast and decelerates at the end */
+    EaseOut = "EaseOut",
+    /* Slow start and end, fast in the middle */
+    EaseInOut = "EaseInOut",
+    /* Simulates a physical bouncing effect at the end */
+    Bounce = "Bounce",
+    /* Slightly overshoots the target before settling */
+    Back = "Back",
+    /* Instantaneous transition at the end of the duration */
+    Step = "Step"
+}
+
+/* The direction in which child elements are placed in a container. */
+export enum FlexDirection {
+    /* Children are placed horizontally from left to right */
+    Row = "Row",
+    /* Children are placed vertically from top to bottom */
+    Column = "Column"
+}
+
+/* The positioning strategy used for calculating element coordinates. */
+export enum Position {
+    /* Positioned according to the normal flow of the layout */
+    Relative = "Relative",
+    /* Positioned relative to the nearest positioned ancestor */
+    Absolute = "Absolute"
+}
+
+/* How an element handles content that exceeds its boundaries. */
+export enum Overflow {
+    /* Content is allowed to render outside the element box */
+    Visible = "Visible",
+    /* Content outside the element box is clipped and invisible */
+    Hidden = "Hidden"
 }
 
 /**
@@ -9,34 +55,97 @@ export enum Align {
  * These properties are passed to the C++ Layout Engine.
  */
 export interface SSSProperties {
-    /**
-     * Determines how child elements are aligned along the cross-axis (horizontal).
-     * For example, 'center' will horizontally center all children within this container.
-     */
-    alignItems?: Align;
-    /** 
-     * Determines how child elements are distributed along the main-axis (vertical).
-     * For example, 'center' will vertically center the entire stack of children.
-     */
-    justifyContent?: Align;
-    /** Internal spacing within the element boundary. */
+    /** Layout & Flexbox **/
+
+    /* Direction of child flow: 'row' or 'column' (Default: 'column') */
+    flexDirection?: FlexDirection;
+
+    /* How the element grows relative to siblings (0 = static, 1 = fill) */
+    flex?: number;
+
+    /* Internal spacing within the element boundary */
     padding?: number | string;
-    /** External spacing around the element boundary. */
+
+    /* Specific directional paddings */
+    paddingTop?: number | string;
+    paddingBottom?: number | string;
+    paddingLeft?: number | string;
+    paddingRight?: number | string;
+
+    /* External spacing around the element boundary */
     margin?: number | string;
-    /** Hex, RGB, or named color for the quad background. */
-    backgroundColor?: numberw;
-    /** Default text color for child Label components. */
+
+    /* Specific directional margins (The fix for your button layout) */
+    marginTop?: number | string;
+    marginBottom?: number | string;
+    marginLeft?: number | string;
+    marginRight?: number | string;
+
+    /** Positioning **/
+
+    /* 'relative' (default) or 'absolute' (breaks out of the flex stack) */
+    position?: Position;
+
+    /* Used with position: 'absolute' to pin elements to screen edges */
+    top?: number | string;
+    bottom?: number | string;
+    left?: number | string;
+    right?: number | string;
+
+    /* Z-index for layering UI elements (depth) */
+    zIndex?: number;
+
+    /** Visuals & Borders **/
+
+    /* Background color in 0xRRGGBBAA format */
+    backgroundColor?: number;
+
+    /* Default text color for child Label components */
     color?: string | number;
-    /** Text size in pixels (handled by the C++ Font Atlas). */
+
+    /* Text size in pixels */
     fontSize?: number;
-    /** Fixed width or percentage of the parent container. */
+
+    /* Fixed width or percentage (e.g., "100%") */
     width?: number | string;
-    /** Fixed height or percentage of the parent container. */
+
+    /* Fixed height or percentage (e.g., "100%") */
     height?: number | string;
-    /** Transparency level from 0.0 (invisible) to 1.0 (opaque). */
+
+    /* Transparency level from 0.0 to 1.0 */
     opacity?: number;
-    /** Corner rounding radius for the C++ fragment shader. */
+
+    /* Corner rounding radius in pixels */
     borderRadius?: number;
+
+    /* Border thickness and color */
+    borderWidth?: number;
+    borderColor?: number;
+
+    /* Allows clipping children that overflow the parent boundary */
+    overflow?: Overflow;
+
+    /** Alignment **/
+
+    /* Horizontal alignment of child elements */
+    alignItems?: Align;
+
+    /* Vertical distribution of child elements */
+    justifyContent?: Align;
+
+    /** Animation & Interaction **/
+
+    /* Animation duration in seconds */
+    transitionDuration?: number;
+
+    /* The easing curve used for transitions */
+    transitionTiming?: Timing;
+
+    /* Scale multiplier when mouse is over the element */
+    hoverScale?: number;
+
+    /* Scale multiplier when the element is clicked */
+    activeScale?: number;
 }
 
 /**
@@ -123,7 +232,6 @@ declare global {
          */
         interface IntrinsicElements {
             view: BaseProperties;
-            button: ButtonProperties;
             label: LabelProperties;
         }
     }

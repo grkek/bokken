@@ -64,12 +64,15 @@ namespace Bokken {
     struct EnvironmentConfiguration {
         struct WindowOverrides {
             bool isFullscreen;
+            bool isBorderlessFullscreen;
+            bool alwaysOnTop;
+            bool transparent;
             bool useVsync;
         } windowOverrides;
 
         ScriptingEngine scriptingEngine;
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(WindowOverrides, isFullscreen, useVsync)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(WindowOverrides, isFullscreen, isBorderlessFullscreen, alwaysOnTop, transparent, useVsync)
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(EnvironmentConfiguration, windowOverrides, scriptingEngine)
     };
 

@@ -30,9 +30,11 @@ namespace Bokken
             Engine() = default;
             ~Engine() { shutdown(); }
 
-            // Non-copyable.
-            Engine(const Engine &) = delete;
-            Engine &operator=(const Engine &) = delete;
+            static Engine &Instance()
+            {
+                static Engine instance;
+                return instance;
+            }
 
             // Setup (call in this order before the game loop starts)
 
@@ -43,7 +45,7 @@ namespace Bokken
              * @param gcThreshKb GC trigger threshold in kilobytes.
              * @return true on success.
              */
-            bool init(AssetPack* assets, int maxHeapMb = 128, int stackKb = 1024, int gcThreshKb = 512);
+            bool init(AssetPack *assets, int maxHeapMb = 128, int stackKb = 1024, int gcThreshKb = 512);
 
             /**
              * Register a native module. Must be called after init() and before loadBytecode().
@@ -92,7 +94,7 @@ namespace Bokken
             JSRuntime *m_rt = nullptr;
             JSContext *m_ctx = nullptr;
 
-            AssetPack* m_assets = nullptr; // Store the VFS reference for module loading
+            AssetPack *m_assets = nullptr; // Store the VFS reference for module loading
 
             std::vector<std::unique_ptr<Modules::Base>> m_modules;
 

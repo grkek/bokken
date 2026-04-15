@@ -122,9 +122,9 @@ namespace Bokken
         }
 
         // 4. Register native modules
-        loop.scripting().addModule(std::make_unique<Modules::Log>());
-        loop.scripting().addModule(std::make_unique<Modules::Canvas>(loop.window(), loop.renderer(), &assets));
-        loop.scripting().addModule(std::make_unique<Modules::Window>(loop.window()));
+        loop.scriptingEngine().addModule(std::make_unique<Modules::Log>());
+        loop.scriptingEngine().addModule(std::make_unique<Modules::Canvas>(loop.window(), loop.renderer(), &assets));
+        loop.scriptingEngine().addModule(std::make_unique<Modules::Window>(loop.window()));
 
         // 5. Load script bytecode via SDL_IOStream
         //

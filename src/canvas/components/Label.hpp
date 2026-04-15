@@ -21,8 +21,10 @@ namespace Bokken
                 void setStyle(const SimpleStyleSheet &s) { m_style = s; }
 
                 std::shared_ptr<Bokken::Canvas::Node> toNode();
+                static void computeNode(std::shared_ptr<Bokken::Canvas::Node> node, Bokken::AssetPack *assets);
+                static void layoutNode(std::shared_ptr<Bokken::Canvas::Node> node);
                 static void draw(SDL_Renderer *r, std::shared_ptr<Bokken::Canvas::Node> n, Bokken::AssetPack *a);
-                static TTF_Font *get_font(const std::string &p, float s, Bokken::AssetPack *a);
+                static TTF_Font *get_font(const std::string &p, float s, Bokken::AssetPack *a, SDL_Renderer *renderer = nullptr);
                 static void clear_font_cache();
 
             private:

@@ -230,7 +230,7 @@ namespace Bokken
 
         Bokken::Modules::Canvas::update(static_cast<float>(dt));
 
-        SDL_SetRenderDrawColor(m_renderer, 227, 115, 131, 255); // Watermelon pink
+        SDL_SetRenderDrawColor(m_renderer, 71, 92, 108, 255);
         SDL_RenderClear(m_renderer);
 
         Bokken::Modules::Canvas::present();

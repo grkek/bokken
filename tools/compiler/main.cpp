@@ -28,20 +28,7 @@ static int StubWindowModule(JSContext *ctx, JSModuleDef *m)
 
 static int StubCanvasModule(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue defaultExport = JS_NewObject(ctx);
-    auto noop = [](JSContext *c, JSValueConst, int, JSValueConst *)
-    { return JS_UNDEFINED; };
-
-    // Methods on the default export
-    JS_SetPropertyStr(ctx, defaultExport, "createElement", JS_NewCFunction(ctx, noop, "createElement", 3));
-    JS_SetPropertyStr(ctx, defaultExport, "render", JS_NewCFunction(ctx, noop, "render", 1));
-    JS_SetModuleExport(ctx, m, "default", defaultExport);
-    
-    // Named exports
-    JS_SetModuleExport(ctx, m, "View", JS_NewString(ctx, "view"));
-    JS_SetModuleExport(ctx, m, "Label", JS_NewString(ctx, "label"));
-    JS_SetModuleExport(ctx, m, "useState", JS_NewCFunction(ctx, noop, "useState", 1));
-
+    JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
     return 0;
 }
 
@@ -54,8 +41,6 @@ static JSModuleDef *StubModuleLoader(JSContext *ctx, const char *module_name, vo
     {
         JSModuleDef *m = JS_NewCModule(ctx, "bokken/canvas", StubCanvasModule);
         JS_AddModuleExport(ctx, m, "default");
-        JS_AddModuleExport(ctx, m, "View");
-        JS_AddModuleExport(ctx, m, "Label");
         return m;
     }
 

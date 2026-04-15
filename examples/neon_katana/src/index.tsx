@@ -7,7 +7,7 @@ function App() {
         <View style={{
             width: "100%",
             height: "100%",
-            backgroundColor: 0x111111FF,
+            backgroundColor: 0x00000000,
             justifyContent: Align.Center,
             alignItems: Align.Center
         }}>
@@ -21,8 +21,7 @@ function App() {
                 style={{
                     width: 64,
                     height: 64,
-                    backgroundColor: 0x3366FFFF,
-                    borderRadius: 30,
+                    backgroundColor: 0x1C242BFF,
                     justifyContent: Align.Center,
                     alignItems: Align.Center,
                     hoverScale: 1.05,

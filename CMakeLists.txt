@@ -9,7 +9,7 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Versioning logic based on build date
+# Versioning logic
 string(TIMESTAMP CURRENT_YEAR  "%Y")
 string(TIMESTAMP CURRENT_MONTH "%m")
 string(TIMESTAMP CURRENT_DAY   "%d")
@@ -18,7 +18,6 @@ set(BOKKEN_SOVERSION "${CURRENT_YEAR}")
 
 message(STATUS "Configuring ${PROJECT_NAME} - Version: ${BOKKEN_VERSION}")
 
-# Ensure binaries and libs land in the same bin folder
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -36,6 +35,17 @@ FetchContent_Declare(
 )
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON  CACHE BOOL "" FORCE)
+
+# SDL3_ttf
+FetchContent_Declare(
+  SDL3_ttf
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
+  GIT_TAG        main
+  GIT_SHALLOW    TRUE
+)
+# CRITICAL: Tell SDL_ttf to build its own FreeType/HarfBuzz
+set(SDLTTF_VENDORED ON CACHE BOOL "" FORCE) 
+set(SDLTTF_SAMPLES OFF CACHE BOOL "" FORCE)
 
 # QuickJS-NG
 FetchContent_Declare(
@@ -65,7 +75,7 @@ set(PHYSFS_BUILD_STATIC       ON  CACHE BOOL "" FORCE)
 set(PHYSFS_BUILD_TEST         OFF CACHE BOOL "" FORCE)
 set(PHYSFS_TARGETNAME_STATIC  "physfs-static" CACHE STRING "" FORCE)
 
-# miniz 2.2.0
+# miniz
 FetchContent_Declare(
   miniz
   GIT_REPOSITORY https://github.com/richgel999/miniz.git
@@ -74,22 +84,8 @@ FetchContent_Declare(
 )
 set(MINIZ_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
-# Populate all dependencies
-FetchContent_MakeAvailable(SDL3 quickjs_ng json physfs miniz)
-
-# Compiler Options
-
-# Silence warnings from third-party targets
-set(THIRD_PARTY_TARGETS qjs physfs-static miniz)
-foreach(TARGET ${THIRD_PARTY_TARGETS})
-    if(TARGET ${TARGET})
-        if(MSVC)
-            target_compile_options(${TARGET} PRIVATE /W0)
-        else()
-            target_compile_options(${TARGET} PRIVATE -w)
-        endif()
-    endif()
-endforeach()
+# POPULATE EVERYTHING
+FetchContent_MakeAvailable(SDL3 SDL3_ttf quickjs_ng json physfs miniz)
 
 # BokkenEngine Library
 
@@ -102,47 +98,38 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS TRUE
 )
 
+# Link SDL3 and SDL3_ttf
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SDL3::SDL3-static
-    miniz            # Linked from FetchContent
+    SDL3_ttf::SDL3_ttf-static
+    miniz
     qjs
     nlohmann_json::nlohmann_json
     physfs-static
 )
 
 target_include_directories(${PROJECT_NAME}
-    # Expose PhysFS headers to anything that links BokkenEngine
     PUBLIC  ${physfs_SOURCE_DIR}/src
+    PRIVATE "${CMAKE_SOURCE_DIR}/src"
 )
 
+# Platform specific system libs
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        shell32 imm32 setupapi version winmm)
+    target_link_libraries(${PROJECT_NAME} PRIVATE shell32 imm32 setupapi version winmm)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE m pthread dl)
 endif()
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    BOKKEN_VERSION="${BOKKEN_VERSION}")
-
 # Tools
 
-# Packer tool
 add_executable(Packer tools/packer/main.cpp)
-target_link_libraries(Packer PRIVATE 
-    qjs 
-    miniz
-)
+target_link_libraries(Packer PRIVATE qjs miniz)
 
-# Compiler tool
 add_executable(Compiler tools/compiler/main.cpp)
 target_link_libraries(Compiler PRIVATE 
     ${PROJECT_NAME} 
     SDL3::SDL3-static
+    SDL3_ttf::SDL3_ttf-static
     qjs
     physfs-static
-)
-
-target_include_directories(Compiler PRIVATE
-    "${CMAKE_SOURCE_DIR}/src"
 )

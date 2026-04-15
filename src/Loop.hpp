@@ -1,10 +1,17 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
+#include "Configuration.hpp"
+#include "AssetPack.hpp"
+#include "./scripting/Engine.hpp"
+#include "./scripting/modules/Canvas.hpp"
 #include <memory>
 #include <string>
-#include "Configuration.hpp"
-#include "./scripting/Engine.hpp"
+#include <cstdio>
+#include <cstring>
+#include <cmath>
+#include <charconv>
 
 namespace Bokken
 {
@@ -78,8 +85,12 @@ namespace Bokken
         /** Returns the SDL window handle (useful for renderer modules). */
         SDL_Window *window() const { return m_window; }
 
+        /** Returns the SDL renderer handle (useful for renderer modules). */
+        SDL_Renderer *renderer() const { return m_renderer; }
+
     private:
         SDL_Window *m_window = nullptr;
+        SDL_Renderer *m_renderer = nullptr;
         Scripting::Engine m_scripting;
 
         bool m_quit = false;

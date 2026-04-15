@@ -35,12 +35,12 @@ static int StubCanvasModule(JSContext *ctx, JSModuleDef *m)
     // Methods on the default export
     JS_SetPropertyStr(ctx, defaultExport, "createElement", JS_NewCFunction(ctx, noop, "createElement", 3));
     JS_SetPropertyStr(ctx, defaultExport, "render", JS_NewCFunction(ctx, noop, "render", 1));
-    JS_SetPropertyStr(ctx, defaultExport, "useState", JS_NewCFunction(ctx, noop, "useState", 1));
     JS_SetModuleExport(ctx, m, "default", defaultExport);
-
+    
     // Named exports
     JS_SetModuleExport(ctx, m, "View", JS_NewString(ctx, "view"));
     JS_SetModuleExport(ctx, m, "Label", JS_NewString(ctx, "label"));
+    JS_SetModuleExport(ctx, m, "useState", JS_NewCFunction(ctx, noop, "useState", 1));
 
     return 0;
 }

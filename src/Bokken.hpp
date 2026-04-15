@@ -101,15 +101,18 @@ namespace Bokken
         // Scripts asset pack
         if (!assets.mount(BOKKEN_SCRIPT_PACK, "/"))
         {
-            fprintf(stderr, "[Bokken] Failed to mount script pack: %s\n",
+            fprintf(stderr, "[Bokken] Failed to mount scripts asset pack: %s\n",
                     BOKKEN_SCRIPT_PACK);
             return EXIT_FAILURE;
         }
 
-        // Additional asset packs can be mounted here. For example:
-        //   assets.mount("assets/textures/high.assetpack", "/textures");
-        //   assets.mount("assets/sounds.assetpack",        "/sounds");
-        //   assets.mount("assets/fonts.assetpack",         "/fonts");
+        // Fonts asset pack
+        if (!assets.mount("assets/fonts.assetpack", "/fonts"))
+        {
+            fprintf(stderr, "[Bokken] Failed to mount fonts asset pack: %s\n",
+                    BOKKEN_SCRIPT_PACK);
+            return EXIT_FAILURE;
+        }
 
         // 3. Initialise the engine loop
         Loop loop;
@@ -120,7 +123,7 @@ namespace Bokken
 
         // 4. Register native modules
         loop.scripting().addModule(std::make_unique<Modules::Log>());
-        loop.scripting().addModule(std::make_unique<Modules::Canvas>());
+        loop.scripting().addModule(std::make_unique<Modules::Canvas>(loop.window(), loop.renderer(), &assets));
         loop.scripting().addModule(std::make_unique<Modules::Window>(loop.window()));
 
         // 5. Load script bytecode via SDL_IOStream

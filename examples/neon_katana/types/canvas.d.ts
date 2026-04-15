@@ -1,18 +1,32 @@
+export enum Align {
+    'start',
+    'center',
+    'end'
+}
+
 /**
  * Simple Style Sheet (SSS) Properties.
  * These properties are passed to the C++ Layout Engine.
  */
 export interface SSSProperties {
-    /** The direction in which children are laid out within the container. */
-    flexDirection?: "row" | "column" | "row-reverse" | "column-reverse";
+    /**
+     * Determines how child elements are aligned along the cross-axis (horizontal).
+     * For example, 'center' will horizontally center all children within this container.
+     */
+    alignItems?: Align;
+    /** 
+     * Determines how child elements are distributed along the main-axis (vertical).
+     * For example, 'center' will vertically center the entire stack of children.
+     */
+    justifyContent?: Align;
     /** Internal spacing within the element boundary. */
     padding?: number | string;
     /** External spacing around the element boundary. */
     margin?: number | string;
     /** Hex, RGB, or named color for the quad background. */
-    backgroundColor?: string;
+    backgroundColor?: numberw;
     /** Default text color for child Label components. */
-    color?: string;
+    color?: string | number;
     /** Text size in pixels (handled by the C++ Font Atlas). */
     fontSize?: number;
     /** Fixed width or percentage of the parent container. */
@@ -49,28 +63,27 @@ export interface BaseProperties {
 }
 
 /**
- * Interactive button component properties.
- */
-export interface ButtonProperties extends BaseProperties {
-    /** The label displayed inside the button. */
-    text?: string;
-    /** Callback triggered by the C++ Input System on pointer release. */
-    onClick?: () => void;
-}
-
-/**
  * Text display component properties.
  */
 export interface LabelProperties extends BaseProperties {
     /** The raw string or number to be rendered by the native font engine. */
-    children?: string | number;
+    children?: string | number | (string | number)[];
 }
 
-/** A container component used for layout and grouping. Maps to a Native View/Panel. */
-export function View(properties: BaseProperties): any;
-/** A clickable UI element. Maps to a Native Button with hit-testing logic. */
-export function Button(properties: ButtonProperties): any;
-/** A text-only element. Maps to a Native Text renderer. */
+/**
+ * 
+ * View display component properties.
+ */
+export interface ViewProperties extends BaseProperties {
+    /** 
+     * Callback triggered by the C++ Input System.
+     */
+    onClick?: () => void;
+}
+
+/** A container component used for layout and grouping. Maps to a native View. */
+export function View(properties: ViewProperties): any;
+/** A text-only element. Maps to a native Text renderer. */
 export function Label(properties: LabelProperties): any;
 
 /**

@@ -59,6 +59,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${THIRD_PARTY}/physfs-src/src"
     "${THIRD_PARTY}/sdl3-src/include"
     "${THIRD_PARTY}/sdl3-build/include-revision"
+    "${THIRD_PARTY}/sdl3_ttf-src/include"
     "${THIRD_PARTY}/quickjs_ng-src"
 )
 

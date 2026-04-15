@@ -1,9 +1,4 @@
 #include "Loop.hpp"
-#include "AssetPack.hpp"
-#include <cstdio>
-#include <cstring>
-#include <cmath>
-#include <charconv>
 
 namespace Bokken
 {
@@ -38,6 +33,13 @@ namespace Bokken
             return false;
         }
 
+        // SDL3 TTF init
+        if (!TTF_Init())
+        {
+            SDL_Log("TTF_Init Failed: %s", SDL_GetError());
+            return -1;
+        }
+
         // Window
         SDL_WindowFlags flags = 0;
         if (windowOVerrides.isFullscreen)
@@ -51,9 +53,23 @@ namespace Bokken
         if (!m_window)
         {
             fprintf(stderr, "[Bokken] SDL_CreateWindow failed: %s\n", SDL_GetError());
+            TTF_Quit();
             SDL_Quit();
             return false;
         }
+
+        m_renderer = SDL_CreateRenderer(m_window, NULL); // NULL picks the default driver (Metal/DirectX/Vulkan)
+        if (!m_renderer)
+        {
+            fprintf(stderr, "[Bokken] SDL_CreateRenderer failed: %s\n", SDL_GetError());
+            SDL_DestroyWindow(m_window);
+            TTF_Quit();
+            SDL_Quit();
+            return false;
+        }
+
+        SDL_SetRenderVSync(m_renderer, 1);
+        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
 
         // Optional: apply clear colour hint via SDL surface (before a renderer is
         // attached). Modules that set up their own renderer (OpenGL, Vulkan, etc.)
@@ -74,6 +90,7 @@ namespace Bokken
         {
             fprintf(stderr, "[Bokken] ScriptingEngine::init() failed\n");
             SDL_DestroyWindow(m_window);
+            TTF_Quit();
             SDL_Quit();
             return false;
         }
@@ -137,6 +154,8 @@ namespace Bokken
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
+            Bokken::Modules::Canvas::handle_event(e);
+
             switch (e.type)
             {
             case SDL_EVENT_QUIT:
@@ -176,6 +195,15 @@ namespace Bokken
         // Variable update
         m_scripting.callOnUpdate(dt);
 
+        Bokken::Modules::Canvas::update(static_cast<float>(dt));
+
+        SDL_SetRenderDrawColor(m_renderer, 227, 115, 131, 255); // Watermelon pink
+        SDL_RenderClear(m_renderer);
+
+        Bokken::Modules::Canvas::present();
+
+        SDL_RenderPresent(m_renderer);
+
         // Yield to OS
         // SDL_Delay(0) releases the timeslice briefly; avoids burning 100% CPU when
         // there is no GPU vsync limiting the loop. Renderer modules should replace
@@ -197,6 +225,15 @@ namespace Bokken
             m_window = nullptr;
         }
 
+        Bokken::Modules::Canvas::clear_font_cache();
+
+        if (m_renderer)
+        {
+            SDL_DestroyRenderer(m_renderer);
+            m_renderer = nullptr;
+        }
+
+        TTF_Quit();
         SDL_Quit();
         m_initialised = false;
 

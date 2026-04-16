@@ -19,8 +19,10 @@
 #include "AssetPack.hpp"
 
 // Built-in modules
-#include "scripting/modules/Log.hpp"
+
 #include "scripting/modules/Canvas.hpp"
+#include "scripting/modules/GameObject.hpp"
+#include "scripting/modules/Log.hpp"
 #include "scripting/modules/Window.hpp"
 
 #ifndef BOKKEN_PROJECT_PATH
@@ -122,9 +124,10 @@ namespace Bokken
         }
 
         // 4. Register native modules
-        loop.scriptingEngine().addModule(std::make_unique<Modules::Log>());
-        loop.scriptingEngine().addModule(std::make_unique<Modules::Canvas>(loop.window(), loop.renderer(), &assets));
-        loop.scriptingEngine().addModule(std::make_unique<Modules::Window>(loop.window()));
+        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::Log>());
+        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::Canvas>(loop.window(), loop.renderer(), &assets));
+        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::GameObject>(loop.renderer(), &assets));
+        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::Window>(loop.window()));
 
         // 5. Load script bytecode via SDL_IOStream
         //

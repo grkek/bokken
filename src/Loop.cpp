@@ -185,7 +185,7 @@ namespace Bokken
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            Bokken::Modules::Canvas::handleEvent(e);
+            Bokken::Scripting::Modules::Canvas::handleEvent(e);
 
             switch (e.type)
             {
@@ -228,12 +228,12 @@ namespace Bokken
         // Variable update
         engine.callOnUpdate(dt);
 
-        Bokken::Modules::Canvas::update(static_cast<float>(dt));
+        Bokken::Scripting::Modules::Canvas::update(static_cast<float>(dt));
 
         SDL_SetRenderDrawColor(m_renderer, 71, 92, 108, 255);
         SDL_RenderClear(m_renderer);
 
-        Bokken::Modules::Canvas::present();
+        Bokken::Scripting::Modules::Canvas::present();
 
         SDL_RenderPresent(m_renderer);
 
@@ -260,7 +260,7 @@ namespace Bokken
             m_window = nullptr;
         }
 
-        Bokken::Modules::Canvas::clear_font_cache();
+        Bokken::Scripting::Modules::Canvas::clear_font_cache();
 
         if (m_renderer)
         {

@@ -84,8 +84,22 @@ FetchContent_Declare(
 )
 set(MINIZ_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
+# GLM (OpenGL Mathematics)
+FetchContent_Declare(
+  glm
+  GIT_REPOSITORY https://github.com/g-truc/glm.git
+  GIT_TAG        1.0.1
+  GIT_SHALLOW    TRUE
+)
+# GLM is header-only, so we don't need to build it as a library
+set(GLM_BUILD_LIBRARY OFF CACHE BOOL "" FORCE)
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SDLTTF_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SDL3TTF_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 # POPULATE EVERYTHING
-FetchContent_MakeAvailable(SDL3 SDL3_ttf quickjs_ng json physfs miniz)
+FetchContent_MakeAvailable(SDL3 SDL3_ttf quickjs_ng json physfs miniz glm)
 
 # BokkenEngine Library
 
@@ -106,6 +120,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     qjs
     nlohmann_json::nlohmann_json
     physfs-static
+    glm::glm
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -126,10 +141,12 @@ add_executable(Packer tools/packer/main.cpp)
 target_link_libraries(Packer PRIVATE qjs miniz)
 
 add_executable(Compiler tools/compiler/main.cpp)
-target_link_libraries(Compiler PRIVATE 
-    ${PROJECT_NAME} 
+target_link_libraries(Compiler PRIVATE
     SDL3::SDL3-static
     SDL3_ttf::SDL3_ttf-static
+    miniz
     qjs
+    nlohmann_json::nlohmann_json
     physfs-static
+    glm::glm
 )

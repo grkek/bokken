@@ -1,3 +1,15 @@
+/* The type of a mesh. */
+export enum Mesh {
+    /* Empty */
+    Empty = "Empty",
+    /* Cube */
+    Cube = "Cube",
+    /* Sphere */
+    Sphere = "Sphere",
+    /* Plane */
+    Plane = "Plane",
+}
+
 /**
  * The base interface for all functional units attached to a GameObject.
  * Data for Native components resides in C++ memory, while Behaviours live in the JS VM.
@@ -88,6 +100,17 @@ export class Rigidbody extends Component {
     setVelocity(x: number, y: number, z: number): void;
 }
 
+/** * Defines the initial state of a GameObject upon creation.
+ */
+export interface GameObjectProperties {
+    name?: string;
+    mesh?: Mesh;
+    position?: { x?: number, y?: number, z?: number };
+    rotation?: { x?: number, y?: number, z?: number };
+    /** Uniform scale (number) or non-uniform scale (vector). */
+    scale?: number | { x?: number, y?: number, z?: number };
+}
+
 /**
  * The primary container for all entities in the Bokken Engine.
  * A GameObject is essentially a 'Handle' to a C++ Entity ID. 
@@ -97,9 +120,6 @@ export class GameObject {
     /** Unique internal ID used to communicate with the C++ Entity Registry. */
     private readonly nativeHandle: number;
 
-    /** The display name used for debugging and searching within the C++ Registry. */
-    public name: string;
-
     /** * Shortcut to the Transform component. 
      * Guaranteed to be present on every GameObject. 
      */
@@ -108,7 +128,7 @@ export class GameObject {
     /** * Creates a new entity within the C++ Registry.
      * @param name Optional name for the entity (defaults to "New GameObject").
      */
-    constructor(name?: string);
+    constructor(configuration?: GameObjectProperties);
 
     /**
      * Instantiates and attaches a Component or Behaviour to this entity.

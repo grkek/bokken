@@ -3,73 +3,76 @@
 
 namespace Bokken
 {
-    namespace Modules
+    namespace Scripting
     {
-        class Window : public Base
+        namespace Modules
         {
-        private:
-            // Standard QuickJS C-functions can't capture 'this',
-            // so we use a static pointer for the module instance.
-            static inline SDL_Window *s_window = nullptr;
-
-        public:
-            Window(SDL_Window *window)
-                : Base("bokken/window")
+            class Window : public Base
             {
-                s_window = window;
-            }
+            private:
+                // Standard QuickJS C-functions can't capture 'this',
+                // so we use a static pointer for the module instance.
+                static inline SDL_Window *s_window = nullptr;
 
-            int declare(JSContext *ctx, JSModuleDef *m) override
-            {
-                return JS_AddModuleExport(ctx, m, "default");
-            }
-
-            int init(JSContext *ctx, JSModuleDef *m) override
-            {
-                JSValue defaultExport = JS_NewObject(ctx);
-
-                // setTitle lambda
-                auto setTitle = [](JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) -> JSValue
+            public:
+                Window(SDL_Window *window)
+                    : Base("bokken/window")
                 {
-                    if (argc >= 1 && s_window)
-                    {
-                        const char *title = JS_ToCString(ctx, argv[0]);
+                    s_window = window;
+                }
 
-                        SDL_SetWindowTitle(s_window, title);
-                        JS_FreeCString(ctx, title);
-                    }
-                    return JS_UNDEFINED;
-                };
-
-                // getSize lambda
-                auto getSize = [](JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) -> JSValue
+                int declare(JSContext *ctx, JSModuleDef *m) override
                 {
-                    int w = 0, h = 0;
+                    return JS_AddModuleExport(ctx, m, "default");
+                }
 
-                    if (s_window)
+                int init(JSContext *ctx, JSModuleDef *m) override
+                {
+                    JSValue defaultExport = JS_NewObject(ctx);
+
+                    // setTitle lambda
+                    auto setTitle = [](JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) -> JSValue
                     {
-                        SDL_GetWindowSize(s_window, &w, &h);
-                    }
+                        if (argc >= 1 && s_window)
+                        {
+                            const char *title = JS_ToCString(ctx, argv[0]);
 
-                    JSValue obj = JS_NewObject(ctx);
+                            SDL_SetWindowTitle(s_window, title);
+                            JS_FreeCString(ctx, title);
+                        }
+                        return JS_UNDEFINED;
+                    };
 
-                    JS_SetPropertyStr(ctx, obj, "width", JS_NewInt32(ctx, w));
-                    JS_SetPropertyStr(ctx, obj, "height", JS_NewInt32(ctx, h));
+                    // getSize lambda
+                    auto getSize = [](JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) -> JSValue
+                    {
+                        int w = 0, h = 0;
 
-                    return obj;
-                };
+                        if (s_window)
+                        {
+                            SDL_GetWindowSize(s_window, &w, &h);
+                        }
 
-                // Attach functions just like your Log module
-                JS_SetPropertyStr(ctx, defaultExport, "setTitle",
-                                  JS_NewCFunction(ctx, setTitle, "setTitle", 1));
+                        JSValue obj = JS_NewObject(ctx);
 
-                JS_SetPropertyStr(ctx, defaultExport, "getSize",
-                                  JS_NewCFunction(ctx, getSize, "getSize", 0));
+                        JS_SetPropertyStr(ctx, obj, "width", JS_NewInt32(ctx, w));
+                        JS_SetPropertyStr(ctx, obj, "height", JS_NewInt32(ctx, h));
 
-                JS_SetModuleExport(ctx, m, "default", defaultExport);
-                return 0;
-            }
-        };
+                        return obj;
+                    };
 
-    } // namespace Modules
+                    // Attach functions just like your Log module
+                    JS_SetPropertyStr(ctx, defaultExport, "setTitle",
+                                      JS_NewCFunction(ctx, setTitle, "setTitle", 1));
+
+                    JS_SetPropertyStr(ctx, defaultExport, "getSize",
+                                      JS_NewCFunction(ctx, getSize, "getSize", 0));
+
+                    JS_SetModuleExport(ctx, m, "default", defaultExport);
+                    return 0;
+                }
+            };
+
+        } // namespace Modules
+    } // namespace Scripting
 } // namespace Bokken

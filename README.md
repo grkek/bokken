@@ -1,4 +1,4 @@
-# Bokken Engine
+# Bokken
 
 Bokken is a high-performance, cross-platform 2D/3D game engine built with a focus on systems architecture, custom tooling, and a lightweight scripting runtime.
 

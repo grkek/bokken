@@ -3,6 +3,9 @@
 #include "Base.hpp"
 #include "../Signal.hpp"
 
+#include <cmath>
+#include <vector>
+
 namespace Bokken
 {
     namespace Audio

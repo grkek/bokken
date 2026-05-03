@@ -6,7 +6,6 @@ namespace Bokken
 {
     namespace Audio
     {
-
         /**
          * The raw audio buffer passed through the effect chain.
          * Interleaved float32 samples — frameCount * channels floats total.

@@ -1,12 +1,17 @@
 #pragma once
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
-#include <SDL3_ttf/SDL_ttf.h>
 #include "Configuration.hpp"
 #include "AssetPack.hpp"
 #include "./scripting/Engine.hpp"
 #include "./scripting/modules/Canvas.hpp"
+#include "./scripting/modules/GameObject.hpp"
+#include "./renderer/Base.hpp"
+#include "canvas/components/Label.hpp"
+#include "renderer/stages/SpriteStage.hpp"
+
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
+
 #include <memory>
 #include <string>
 #include <cstdio>
@@ -20,22 +25,18 @@ namespace Bokken
     /**
      * Drives the main game loop using SDL3.
      *
-     * Responsibilities:
-     *   - Initialise SDL3 (video + events).
-     *   - Create and configure the OS window from ProjectConfiguration.
-     Scripting::*   - Own the Engine and forward its module registrations.
-     *   - Run the SDL event loop with:
-     *       • Variable-timestep  onUpdate(dt)        — every rendered frame.
-     *       • Fixed-timestep     onFixedUpdate(dt)   — at a configurable Hz.
-     *       • One-shot           onStart()           — before the first frame.
-     *   - Handle SDL_QUIT and expose a clean shutdown path.
+     * Post-GL refactor:
+     *   - Window is created with SDL_WINDOW_OPENGL (mandatory).
+     *   - SDL_Renderer is gone — replaced by our Renderer (owns GL ctx,
+     *     SpriteBatcher, GlyphCache, Pipeline).
+     *   - tick() calls renderer.beginFrame()/endFrame() instead of
+     *     SDL_RenderClear / SDL_RenderPresent.
      *
-     * Usage:
+     * Usage is unchanged from the caller's perspective:
      *   Loop loop;
-     *   loop.init(config, "development");
-     *   loop.scripting().addModule(std::make_unique<LogModule>());
+     *   loop.init(config, "development", 60, &assets);
      *   loop.loadBytecode(data, len, "index.script");
-     *   loop.run();   // blocks until the window is closed
+     *   loop.run();
      */
     class Loop
     {
@@ -43,72 +44,46 @@ namespace Bokken
         Loop() = default;
         ~Loop() { shutdown(); }
 
-        // Non-copyable.
         Loop(const Loop &) = delete;
         Loop &operator=(const Loop &) = delete;
 
-        /**
-         * Initialises SDL, creates the window, and sets up the scripting engine.
-         * @param config      Parsed ProjectConfiguration (from project.bokken).
-         * @param environment "development" or "production".
-         * @param fixedHz     Fixed-update frequency in Hz. Default: 60 (16.67ms steps).
-         * @return true on success.
-         */
         bool init(const ProjectConfiguration &config,
                   const std::string &environment = "development",
                   int fixedHz = 60,
                   AssetPack *assets = nullptr);
 
-        /**
-         * Convenience overload: load bytecode into the scripting engine.
-         * Must be called after init() and after all modules have been registered.
-         */
         bool loadBytecode(const uint8_t *data, size_t len, const std::string &name);
 
-        /**
-         * Access the scripting engine to register native modules.
-         * Call addModule() on the returned reference before loadBytecode().
-         */
         Scripting::Engine &scriptingEngine() { return Scripting::Engine::Instance(); }
 
-        /**
-         * Enter the SDL event loop. Blocks until the window is closed or
-         * shutdown() is called from within a JS hook (via a native binding).
-         */
         void run();
-
-        /**
-         * Request a clean shutdown. Safe to call from any thread.
-         * The loop will exit after the current frame completes.
-         */
         void requestQuit() { m_quit = true; }
 
-        /** Returns the SDL window handle (useful for renderer modules). */
         SDL_Window *window() const { return m_window; }
-
-        /** Returns the SDL renderer handle (useful for renderer modules). */
-        SDL_Renderer *renderer() const { return m_renderer; }
+        Renderer::Base *renderer() { return m_renderer.get(); }
 
     private:
         SDL_Window *m_window = nullptr;
-        SDL_Renderer *m_renderer = nullptr;
+        std::unique_ptr<Renderer::Base> m_renderer;
+        AssetPack *m_assets = nullptr;
 
         bool m_quit = false;
         bool m_initialised = false;
 
-        // Timing
-        double m_fixedStep = 0.02; // seconds per fixed-update tick (1/fixedHz)
-        double m_fixedAccum = 0.0; // accumulated time since last fixed tick
-        Uint64 m_lastTick = 0;     // SDL_GetTicks64() at previous frame
+        // Timing.
+        double m_fixedStep = 0.02;
+        double m_fixedAccum = 0.0;
+        Uint64 m_lastTick = 0;
 
-        // Cap the maximum dt fed into onUpdate to avoid spiral-of-death on hitches.
-        static constexpr double k_maxDeltaTime = 0.25; // 260 ms
+        static constexpr double k_maxDeltaTime = 0.25;
+
+        // Cached clear color from configuration (linear sRGB-ish, 0..1).
+        float m_clearR = 0.075f, m_clearG = 0.090f, m_clearB = 0.105f;
 
         void processEvents();
         void tick();
         void shutdown();
 
-        // Parse a CSS-style hex color string ("#RRGGBB") into 0–255 components.
         static bool parseClearColor(const std::string &hex,
                                     uint8_t &r, uint8_t &g, uint8_t &b);
     };

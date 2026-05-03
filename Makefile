@@ -11,6 +11,17 @@ else
     GENERATOR = 
 endif
 
+ifdef VIRTUAL_ENV
+    PYTHON_HINT = -DPython3_EXECUTABLE=$(VIRTUAL_ENV)/bin/python3
+else
+    PYENV_PYTHON := $(shell command -v pyenv >/dev/null 2>&1 && pyenv which python3 2>/dev/null)
+    ifneq ($(PYENV_PYTHON),)
+        PYTHON_HINT = -DPython3_EXECUTABLE=$(PYENV_PYTHON)
+    else
+        PYTHON_HINT =
+    endif
+endif
+
 # OS Detection and Extension Setup
 ifeq ($(OS),Windows_NT)
     LIB_EXT = .dll
@@ -35,7 +46,7 @@ endif
 all: build
 
 setup:
-	cmake -S . -B $(BUILD_DIR) $(GENERATOR) -DCMAKE_BUILD_TYPE=Debug
+	cmake -S . -B $(BUILD_DIR) $(GENERATOR) $(PYTHON_HINT) -DCMAKE_BUILD_TYPE=Debug
 
 build: setup
 	cmake --build $(BUILD_DIR)
@@ -49,11 +60,36 @@ windows:
 	@cmake -E make_directory $(WINDOWS_BUILD_DIR)
 	cmake -S . -B $(WINDOWS_BUILD_DIR) \
 		$(GENERATOR) \
+		$(PYTHON_HINT) \
 		-DCMAKE_TOOLCHAIN_FILE=$(TOOLCHAIN_PATH) \
 		-DCMAKE_BUILD_TYPE=Release
 	cmake --build $(WINDOWS_BUILD_DIR)
 
+# Print the command to install Jinja2 into the Python that CMake actually
+# picked. glad's code generator imports Jinja2 at build time; if you saw
+# `ModuleNotFoundError: No module named 'jinja2'`, run `make jinja2`
+# to get the exact pip command for the right interpreter, then paste it
+# into your shell.
+#
+# We deliberately print rather than execute — installing into the user's
+# Python is a side effect that should be opt-in, not silent.
+jinja2:
+	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
+		echo "No build/ yet — run 'make setup' first, then 'make jinja2'."; \
+		exit 1; \
+	fi
+	@PY=$$(grep '^Python3_EXECUTABLE:' $(BUILD_DIR)/CMakeCache.txt | cut -d= -f2); \
+	if [ -z "$$PY" ]; then \
+		echo "Couldn't find Python3_EXECUTABLE in $(BUILD_DIR)/CMakeCache.txt."; \
+		echo "Has CMake configured glad yet? Try 'make setup' first."; \
+		exit 1; \
+	fi; \
+	echo "CMake picked: $$PY"; \
+	echo ""; \
+	echo "Run this to install Jinja2 into it:"; \
+	echo "  $$PY -m pip install --break-system-packages jinja2"
+
 clean:
 	$(CLEAN_CMD)
 
-.PHONY: all setup build run windows clean
+.PHONY: all setup build run windows clean jinja2

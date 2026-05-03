@@ -7,6 +7,8 @@
 #include "Overflow.hpp"
 #include <string>
 #include <cstdint>
+#include <cmath>
+#include <limits>
 
 namespace Bokken
 {
@@ -15,6 +17,26 @@ namespace Bokken
         /**
          * Native representation of the Simple Style Sheet (SSS).
          * Used by the Layout Engine to calculate Node geometry and rendering state.
+         *
+         * Per-side override convention
+         * ---------------------------
+         * `padding` and `margin` are the base shorthand values. The per-side
+         * fields (paddingTop, marginLeft, ...) override the base ONLY when the
+         * user explicitly set them. We encode "user did not set this" as NaN.
+         *
+         * The previous convention used 0 to mean "unset" — but 0 is also a
+         * valid user input ("I want zero top padding even though `padding` is
+         * 8"), and the old code couldn't tell the two cases apart. NaN never
+         * round-trips through JSON or arithmetic accidentally, so it's a
+         * safe sentinel.
+         *
+         * Use `resolveSide(side, base)` to get the effective value: it returns
+         * `side` if set (non-NaN), else `base`.
+         *
+         * The same scheme applies to `top/bottom/left/right` for absolute
+         * positioning — defaulting them to NaN distinguishes "not pinned to
+         * that edge" from "pinned at offset 0", which is a meaningful
+         * difference (see View::layoutNode).
          */
         struct SimpleStyleSheet
         {
@@ -29,31 +51,32 @@ namespace Bokken
             /* Base internal spacing */
             float padding = 0.0f;
 
-            /* Granular internal spacing */
-            float paddingTop = 0.0f;
-            float paddingBottom = 0.0f;
-            float paddingLeft = 0.0f;
-            float paddingRight = 0.0f;
+            /* Granular internal spacing — NaN means "use `padding`" */
+            float paddingTop    = std::numeric_limits<float>::quiet_NaN();
+            float paddingBottom = std::numeric_limits<float>::quiet_NaN();
+            float paddingLeft   = std::numeric_limits<float>::quiet_NaN();
+            float paddingRight  = std::numeric_limits<float>::quiet_NaN();
 
             /* Base external spacing */
             float margin = 0.0f;
 
-            /* Granular external spacing (The fix for your button layout) */
-            float marginTop = 0.0f;
-            float marginBottom = 0.0f;
-            float marginLeft = 0.0f;
-            float marginRight = 0.0f;
+            /* Granular external spacing — NaN means "use `margin`" */
+            float marginTop    = std::numeric_limits<float>::quiet_NaN();
+            float marginBottom = std::numeric_limits<float>::quiet_NaN();
+            float marginLeft   = std::numeric_limits<float>::quiet_NaN();
+            float marginRight  = std::numeric_limits<float>::quiet_NaN();
 
             /** Positioning **/
 
             /* Positioning strategy (Default: Relative) */
             Bokken::Canvas::Position position = Bokken::Canvas::Position::Relative;
 
-            /* Coordinates for absolute positioning */
-            float top = 0.0f;
-            float bottom = 0.0f;
-            float left = 0.0f;
-            float right = 0.0f;
+            /* Coordinates for absolute positioning. NaN means "not pinned to
+             * that edge" — distinct from 0, which means "pinned at offset 0". */
+            float top    = std::numeric_limits<float>::quiet_NaN();
+            float bottom = std::numeric_limits<float>::quiet_NaN();
+            float left   = std::numeric_limits<float>::quiet_NaN();
+            float right  = std::numeric_limits<float>::quiet_NaN();
 
             /* Rendering order priority */
             int32_t zIndex = 0;
@@ -113,5 +136,28 @@ namespace Bokken
             /* Multiplier when active/clicked */
             float activeScale = 0.95f;
         };
+
+        /**
+         * Resolve a per-side override against the shorthand base.
+         * Returns `side` if the user set it (non-NaN), else `base`.
+         *
+         * This is the single source of truth for the
+         *   "padding-top falls back to padding"
+         * rule. Always call it instead of checking != 0 by hand.
+         */
+        inline float resolveSide(float side, float base)
+        {
+            return std::isnan(side) ? base : side;
+        }
+
+        /**
+         * Test whether a NaN-sentinel field was set by the user.
+         * Used for absolute positioning, where the difference between
+         * "set to 0" and "not pinned" matters.
+         */
+        inline bool isSet(float v)
+        {
+            return !std::isnan(v);
+        }
     }
 }

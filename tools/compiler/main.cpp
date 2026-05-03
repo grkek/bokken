@@ -38,6 +38,12 @@ static int StubGameObjectModule(JSContext *ctx, JSModuleDef *m)
     return 0;
 }
 
+static int StubAudioModule(JSContext *ctx, JSModuleDef *m)
+{
+    JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
+    return 0;
+}
+
 static JSModuleDef *StubModuleLoader(JSContext *ctx, const char *module_name, void *opaque)
 {
     auto *configuration = static_cast<CompilerContext *>(opaque);
@@ -67,6 +73,13 @@ static JSModuleDef *StubModuleLoader(JSContext *ctx, const char *module_name, vo
     if (strcmp(module_name, "bokken/gameObject") == 0)
     {
         JSModuleDef *m = JS_NewCModule(ctx, "bokken/gameObject", StubGameObjectModule);
+        JS_AddModuleExport(ctx, m, "default");
+        return m;
+    }
+
+    if (strcmp(module_name, "bokken/audio") == 0)
+    {
+        JSModuleDef *m = JS_NewCModule(ctx, "bokken/audio", StubAudioModule);
         JS_AddModuleExport(ctx, m, "default");
         return m;
     }

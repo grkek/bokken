@@ -433,7 +433,6 @@ namespace Bokken
                 }
                 else if (JS_IsArray(children))
                 {
-                    // Recursively add children for non-label nodes
                     uint32_t len = 0;
                     JSValue jsLen = JS_GetPropertyStr(ctx, children, "length");
                     JS_ToUint32(ctx, &len, jsLen);
@@ -442,7 +441,27 @@ namespace Bokken
                     for (uint32_t i = 0; i < len; i++)
                     {
                         JSValue c = JS_GetPropertyUint32(ctx, children, i);
-                        if (JS_IsObject(c))
+                        if (JS_IsArray(c))
+                        {
+                            // Flatten nested arrays (from .map() calls)
+                            uint32_t innerLen = 0;
+                            JSValue jsInnerLen = JS_GetPropertyStr(ctx, c, "length");
+                            JS_ToUint32(ctx, &innerLen, jsInnerLen);
+                            JS_FreeValue(ctx, jsInnerLen);
+
+                            for (uint32_t j = 0; j < innerLen; j++)
+                            {
+                                JSValue inner = JS_GetPropertyUint32(ctx, c, j);
+                                if (JS_IsObject(inner))
+                                {
+                                    auto childNode = synchronize_tree(ctx, inner);
+                                    if (childNode)
+                                        node->add_child(childNode);
+                                }
+                                JS_FreeValue(ctx, inner);
+                            }
+                        }
+                        else if (JS_IsObject(c))
                         {
                             auto childNode = synchronize_tree(ctx, c);
                             if (childNode)
@@ -460,7 +479,7 @@ namespace Bokken
                     // Reference count increment to keep the function alive in JS heap
                     JSValue capturedVal = JS_DupValue(ctx, jsOnClick);
 
-                    // NATIVE LAMBDA: Triggers when the user interacts with the C++ Node
+                    // Triggers when the user interacts with the C++ Node
                     node->onClick = [capturedVal]()
                     {
                         auto &engine = Bokken::Scripting::Engine::Instance();
@@ -510,23 +529,28 @@ namespace Bokken
                 return node;
             }
 
-            void drawNode(SDL_Renderer *renderer, std::shared_ptr<Bokken::Canvas::Node> node)
+            void drawNode(Bokken::Renderer::SpriteBatcher &batcher,
+                          std::shared_ptr<Bokken::Canvas::Node> node, int layer)
             {
-                if (!node || !renderer)
+                if (!node)
                     return;
 
                 if (node->type == "View")
                 {
-                    Bokken::Canvas::Components::View::draw(renderer, node);
+                    Bokken::Canvas::Components::View::draw(batcher, node, layer);
                 }
                 else if (node->type == "Label")
                 {
-                    Bokken::Canvas::Components::Label::draw(renderer, node, Canvas::s_assets);
+                    Bokken::Canvas::Components::Label::draw(batcher, node, Canvas::s_assets, layer);
                 }
 
+                // Children render two layers above their parent — leaves
+                // room for View::draw to use (layer, layer+1) for the
+                // border + background pair without colliding with a child.
+                int childLayer = layer + 2;
                 for (auto &child : node->children)
                 {
-                    drawNode(renderer, child);
+                    drawNode(batcher, child, childLayer);
                 }
             }
 
@@ -778,14 +802,13 @@ namespace Bokken
 
             void Canvas::present()
             {
-                if (!s_renderer || !s_current_tree)
+                if (!s_batcher || !s_current_tree)
                     return;
 
-                int drawW, drawH;
-                SDL_GetRenderOutputSize(s_renderer, &drawW, &drawH);
-
-                SDL_SetRenderDrawBlendMode(s_renderer, SDL_BLENDMODE_BLEND);
-                drawNode(s_renderer, s_current_tree);
+                // Canvas tree is drawn at base layer 1000 so it sits above
+                // GameObject sprites (which use layer 0..999 by convention).
+                // Children get +2 per descent inside drawNode.
+                drawNode(*s_batcher, s_current_tree, 1000);
             }
 
             void Canvas::update(float deltaTime)

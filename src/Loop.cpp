@@ -3,22 +3,21 @@
 namespace Bokken
 {
 
-    // Init
     bool Loop::init(const ProjectConfiguration &configuration,
                     const std::string &environment,
                     int fixedHz,
                     AssetPack *assets)
     {
-        // Retrieve the environment-specific overrides.
+        m_assets = assets;
+
+        // Resolve environment overrides.
         const EnvironmentConfiguration *environmentConfiguration = nullptr;
-        try
-        {
+        try {
             environmentConfiguration = &configuration.get_environment(environment == "production");
-        }
-        catch (...)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Unknown environment '%s', defaulting to development\n",
-                    environment.c_str());
+        } catch (...) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] Unknown environment '%s', defaulting to development\n",
+                         environment.c_str());
             environmentConfiguration = &configuration.get_environment(false);
         }
 
@@ -26,110 +25,97 @@ namespace Bokken
         const auto &windowOverrides = environmentConfiguration->windowOverrides;
         const auto &scriptingEngineConfiguration = environmentConfiguration->scriptingEngine;
 
-        // SDL3 init
-        if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_Init failed: %s\n", SDL_GetError());
+        // SDL3 init — video + events. Audio comes via the audio module.
+        if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] SDL_Init failed: %s\n", SDL_GetError());
             return false;
         }
 
-        // SDL3 TTF init
-        if (!TTF_Init())
-        {
-            SDL_Log("TTF_Init Failed: %s", SDL_GetError());
-            return -1;
+        if (!TTF_Init()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "TTF_Init failed: %s", SDL_GetError());
+            SDL_Quit();
+            return false;
         }
 
-        // Window
-        SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+        // Window flags. SDL_WINDOW_OPENGL is mandatory now — the GL
+        // renderer needs a GL-capable surface to attach to.
+        SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_OPENGL;
 
-        flags |= SDL_WINDOW_OPENGL;
-
-        // Fullscreen overrides
         if (windowOverrides.isFullscreen)
-        {
             flags |= SDL_WINDOW_FULLSCREEN;
-        }
-
-        // Optional: borderless fullscreen window (real fullscreen but without mode change)
         if (windowOverrides.isBorderlessFullscreen)
-        {
             flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
-        }
-
-        // Optional: always on top (debugging / overlay)
         if (windowOverrides.alwaysOnTop)
-        {
             flags |= SDL_WINDOW_ALWAYS_ON_TOP;
-        }
-
-        // Optional: transparent window (for overlays)
         if (windowOverrides.transparent)
-        {
             flags |= SDL_WINDOW_TRANSPARENT;
-        }
 
         m_window = SDL_CreateWindow(
             configuration.general.displayTitle.c_str(),
             window.width, window.height,
             flags);
 
-        if (!m_window)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_CreateWindow failed: %s\n", SDL_GetError());
+        if (!m_window) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] SDL_CreateWindow failed: %s\n", SDL_GetError());
             TTF_Quit();
             SDL_Quit();
             return false;
         }
-
-        // Set minimum size to prevent layout collapse
         SDL_SetWindowMinimumSize(m_window, 640, 480);
 
-        m_renderer = SDL_CreateRenderer(m_window, NULL); // NULL picks the default driver (Metal/DirectX/Vulkan)
-        if (!m_renderer)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        // Cache clear color in 0..1 floats. SpriteStage will pick this
+        // up below.
+        uint8_t cr = 19, cg = 23, cb = 27;
+        if (parseClearColor(window.clearColor, cr, cg, cb)) {
+            m_clearR = cr / 255.0f;
+            m_clearG = cg / 255.0f;
+            m_clearB = cb / 255.0f;
+        }
+
+        // Create our renderer — this is where the GL context is born.
+        m_renderer = std::make_unique<Renderer::Base>();
+        if (!m_renderer->init(m_window, m_assets)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] Renderer::init failed");
             SDL_DestroyWindow(m_window);
             TTF_Quit();
             SDL_Quit();
             return false;
         }
 
-        if (windowOverrides.useVsync)
-        {
-            SDL_SetRenderVSync(m_renderer, 1);
+        // Apply configured clear color to the default scene stage.
+        if (auto *st = dynamic_cast<Renderer::SpriteStage *>(
+                m_renderer->pipeline().findStage("scene"))) {
+            st->clearR = m_clearR;
+            st->clearG = m_clearG;
+            st->clearB = m_clearB;
+            st->clearA = 1.0f;
         }
 
-        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        // Wire the renderer into the Canvas pieces that need it.
+        Scripting::Modules::Canvas::setBatcher(&m_renderer->batcher());
+        Bokken::Canvas::Components::Label::s_glyphCache = &m_renderer->glyphs();
 
-        // Optional: apply clear colour hint via SDL surface (before a renderer is
-        // attached). Modules that set up their own renderer (OpenGL, Vulkan, etc.)
-        // should use their own clear-colour mechanism; this is just a placeholder.
-        uint8_t cr = 0, cg = 0, cb = 0;
-        if (parseClearColor(window.clearColor, cr, cg, cb))
-        {
-            // Store for use by a future renderer module. Nothing to do here yet.
-            (void)cr;
-            (void)cg;
-            (void)cb;
-        }
-
-        // Scripting engine
-        if (!this->scriptingEngine().init(assets, scriptingEngineConfiguration.runtime.maxHeapSizeMb,
-                                          scriptingEngineConfiguration.runtime.stackSizeKb,
-                                          scriptingEngineConfiguration.runtime.gcThresholdKb))
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] ScriptingEngine::init() failed\n");
+        // Scripting engine.
+        if (!this->scriptingEngine().init(assets,
+                scriptingEngineConfiguration.runtime.maxHeapSizeMb,
+                scriptingEngineConfiguration.runtime.stackSizeKb,
+                scriptingEngineConfiguration.runtime.gcThresholdKb)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] ScriptingEngine::init() failed\n");
+            m_renderer.reset();
             SDL_DestroyWindow(m_window);
             TTF_Quit();
             SDL_Quit();
             return false;
         }
 
-        // Timing
+        // Timing.
         m_fixedStep = (fixedHz > 0) ? (1.0 / fixedHz) : 0.02;
         m_fixedAccum = 0.0;
-        m_lastTick = SDL_GetTicksNS(); // nanosecond precision
+        m_lastTick = SDL_GetTicksNS();
 
         m_initialised = true;
         m_quit = false;
@@ -138,68 +124,50 @@ namespace Bokken
                 configuration.general.displayTitle.c_str(),
                 configuration.general.projectVersion.c_str(),
                 environment.c_str());
-
         return true;
     }
 
-    bool Loop::loadBytecode(const uint8_t *data, size_t len,
-                            const std::string &name)
+    bool Loop::loadBytecode(const uint8_t *data, size_t len, const std::string &name)
     {
-        if (!m_initialised)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] loadBytecode() called before init()\n");
+        if (!m_initialised) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] loadBytecode() called before init()\n");
             return false;
         }
         return this->scriptingEngine().loadBytecode(data, len, name);
     }
 
-    // Main loop
     void Loop::run()
     {
         auto &engine = this->scriptingEngine();
-
-        if (!m_initialised)
-            return;
-
-        if (!engine.isReady())
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] ScriptingEngine is not ready!\n");
+        if (!m_initialised) return;
+        if (!engine.isReady()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "[Bokken] ScriptingEngine is not ready!\n");
             return;
         }
 
         engine.callOnStart();
         m_lastTick = SDL_GetTicksNS();
 
-        while (!m_quit)
-        {
+        while (!m_quit) {
             processEvents();
-            if (m_quit)
-                break;
+            if (m_quit) break;
             tick();
         }
     }
 
-    // Per-frame work
     void Loop::processEvents()
     {
         SDL_Event e;
-        while (SDL_PollEvent(&e))
-        {
+        while (SDL_PollEvent(&e)) {
             Scripting::Modules::Canvas::handleEvent(e);
-
-            switch (e.type)
-            {
-            case SDL_EVENT_QUIT:
-                m_quit = true;
-                break;
-
-            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-                m_quit = true;
-                break;
-
-            // Future: route input events to an InputModule here.
-            default:
-                break;
+            switch (e.type) {
+                case SDL_EVENT_QUIT:
+                case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+                    m_quit = true;
+                    break;
+                default: break;
             }
         }
     }
@@ -208,65 +176,54 @@ namespace Bokken
     {
         auto &engine = this->scriptingEngine();
 
-        // Delta time
+        // dt
         Uint64 now = SDL_GetTicksNS();
-        double dt = static_cast<double>(now - m_lastTick) * 1e-9; // ns → s
+        double dt = static_cast<double>(now - m_lastTick) * 1e-9;
         m_lastTick = now;
+        if (dt > k_maxDeltaTime) dt = k_maxDeltaTime;
 
-        // Guard against enormous spikes (e.g. debugger pause, OS scheduling).
-        if (dt > k_maxDeltaTime)
-            dt = k_maxDeltaTime;
-
-        // Fixed update
+        // Fixed steps.
         m_fixedAccum += dt;
-        while (m_fixedAccum >= m_fixedStep)
-        {
+        while (m_fixedAccum >= m_fixedStep) {
             engine.callOnFixedUpdate(m_fixedStep);
+            Scripting::Modules::GameObject::fixedUpdate((float)m_fixedStep);
             m_fixedAccum -= m_fixedStep;
         }
 
-        // Variable update
+        // Variable updates.
         engine.callOnUpdate(dt);
+        Scripting::Modules::GameObject::update((float)dt);
+        Scripting::Modules::Canvas::update((float)dt);
 
-        Scripting::Modules::Canvas::update(static_cast<float>(dt));
+        // Render.
+        m_renderer->beginFrame();
 
-        SDL_SetRenderDrawColor(m_renderer, 71, 92, 108, 255);
-        SDL_RenderClear(m_renderer);
-
+        // Modules submit draws into m_renderer->batcher() during these calls.
+        Scripting::Modules::GameObject::render();
         Scripting::Modules::Canvas::present();
 
-        SDL_RenderPresent(m_renderer);
+        m_renderer->endFrame((float)dt);
 
-        // Yield to OS
-        // SDL_Delay(0) releases the timeslice briefly; avoids burning 100% CPU when
-        // there is no GPU vsync limiting the loop. Renderer modules should replace
-        // this with their own swap / present call.
+        // Tiny yield so we don't spin in the rare case vsync is off.
         SDL_Delay(0);
     }
 
-    // Shutdown
     void Loop::shutdown()
     {
+        if (!m_initialised) return;
         auto &engine = this->scriptingEngine();
-
-        if (!m_initialised)
-            return;
-
         engine.shutdown();
 
-        if (m_window)
-        {
+        // Drop renderer BEFORE the window — it owns the GL context bound to it.
+        m_renderer.reset();
+
+        if (m_window) {
             SDL_DestroyWindow(m_window);
             m_window = nullptr;
         }
 
         Scripting::Modules::Canvas::clear_font_cache();
-
-        if (m_renderer)
-        {
-            SDL_DestroyRenderer(m_renderer);
-            m_renderer = nullptr;
-        }
+        Bokken::Canvas::Components::Label::clear_font_cache();
 
         TTF_Quit();
         SDL_Quit();
@@ -275,26 +232,18 @@ namespace Bokken
         fprintf(stdout, "[Bokken] Engine shutdown complete.\n");
     }
 
-    // Helpers
     bool Loop::parseClearColor(const std::string &hex,
-                               uint8_t &r, uint8_t &g, uint8_t &b)
+                                uint8_t &r, uint8_t &g, uint8_t &b)
     {
-        // Accepts "#RRGGBB"
-        if (hex.size() != 7 || hex[0] != '#')
-            return false;
-
-        auto hexByte = [&](size_t pos, uint8_t &out) -> bool
-        {
+        if (hex.size() != 7 || hex[0] != '#') return false;
+        auto hexByte = [&](size_t pos, uint8_t &out) -> bool {
             uint8_t val = 0;
             auto [ptr, ec] = std::from_chars(hex.data() + pos,
-                                             hex.data() + pos + 2,
-                                             val, 16);
-            if (ec != std::errc())
-                return false;
+                                              hex.data() + pos + 2, val, 16);
+            if (ec != std::errc()) return false;
             out = val;
             return true;
         };
-
         return hexByte(1, r) && hexByte(3, g) && hexByte(5, b);
     }
 

@@ -3,6 +3,8 @@
 #include "Base.hpp"
 #include "../Signal.hpp"
 
+#include <vector>
+
 namespace Bokken
 {
     namespace Audio
@@ -25,7 +27,10 @@ namespace Bokken
                     const float a = rc / (rc + dt);
 
                     if (m_state.size() != signal.channels)
+                    {
                         m_state.assign(signal.channels, 0.0f);
+                        m_prev.assign(signal.channels, 0.0f);
+                    }
 
                     for (uint32_t f = 0; f < signal.frameCount; f++)
                     {

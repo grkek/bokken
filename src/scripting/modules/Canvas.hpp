@@ -19,6 +19,8 @@
 
 namespace Bokken
 {
+    namespace Renderer { class SpriteBatcher; }
+
     namespace Scripting
     {
         namespace Modules
@@ -26,13 +28,23 @@ namespace Bokken
             class Canvas : public Base
             {
             public:
-                Canvas(SDL_Window *window, SDL_Renderer *renderer, AssetPack *assets)
+                /**
+                 * Construct the bokken/canvas scripting module.
+                 *
+                 * After the GL refactor we hold a SpriteBatcher* (set later by
+                 * the Renderer module) instead of an SDL_Renderer. Window
+                 * survives because layout still queries window size for
+                 * percentage-based units.
+                 */
+                Canvas(SDL_Window *window, AssetPack *assets)
                     : Base("bokken/canvas"), m_assets(assets)
                 {
                     s_window = window;
-                    s_renderer = renderer;
                     s_assets = assets;
                 }
+
+                // Wired in by the Renderer module before the first frame.
+                static void setBatcher(Bokken::Renderer::SpriteBatcher *b) { s_batcher = b; }
 
                 int declare(JSContext *ctx, JSModuleDef *m) override;
                 int init(JSContext *ctx, JSModuleDef *m) override;
@@ -56,7 +68,9 @@ namespace Bokken
                 static void handleEvent(const SDL_Event &event);
 
             private:
-                friend void drawNode(SDL_Renderer *renderer, std::shared_ptr<Bokken::Canvas::Node> node);
+                friend void drawNode(Bokken::Renderer::SpriteBatcher &batcher,
+                                      std::shared_ptr<Bokken::Canvas::Node> node,
+                                      int layer);
 
                 /** Finds the top-most node under the mouse coordinates **/
                 static std::shared_ptr<Bokken::Canvas::Node> find_node_at(std::shared_ptr<Bokken::Canvas::Node> root, float mx, float my);
@@ -71,7 +85,7 @@ namespace Bokken
                 static void reset_active_states(std::shared_ptr<Bokken::Canvas::Node> node);
 
                 static inline SDL_Window *s_window = nullptr;
-                static inline SDL_Renderer *s_renderer = nullptr;
+                static inline Bokken::Renderer::SpriteBatcher *s_batcher = nullptr;
 
                 AssetPack *m_assets;
                 static inline AssetPack *s_assets = nullptr;
@@ -98,7 +112,9 @@ namespace Bokken
                 static JSValue s_root_element;
             };
 
-            void drawNode(SDL_Renderer *renderer, std::shared_ptr<Bokken::Canvas::Node> node);
+            void drawNode(Bokken::Renderer::SpriteBatcher &batcher,
+                           std::shared_ptr<Bokken::Canvas::Node> node,
+                           int layer);
         }
     }
 }

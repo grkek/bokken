@@ -1,5 +1,7 @@
 #include "View.hpp"
+#include "../../renderer/SpriteBatcher.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace Bokken
 {
@@ -21,22 +23,25 @@ namespace Bokken
             void View::computeNode(std::shared_ptr<Node> node, AssetPack *assets)
             {
                 const auto &s = node->style;
-                float pT = (s.paddingTop != 0) ? s.paddingTop : s.padding;
-                float pB = (s.paddingBottom != 0) ? s.paddingBottom : s.padding;
-                float pL = (s.paddingLeft != 0) ? s.paddingLeft : s.padding;
-                float pR = (s.paddingRight != 0) ? s.paddingRight : s.padding;
+                // resolveSide() returns the per-side override if set (non-NaN),
+                // otherwise falls back to the shorthand. The previous `!= 0`
+                // test couldn't distinguish "user set 0" from "user didn't set
+                // it", which broke layouts that intentionally zeroed one side.
+                const float pT = resolveSide(s.paddingTop,    s.padding);
+                const float pB = resolveSide(s.paddingBottom, s.padding);
+                const float pL = resolveSide(s.paddingLeft,   s.padding);
+                const float pR = resolveSide(s.paddingRight,  s.padding);
 
                 float contentW = 0, contentH = 0;
 
-                // First pass: measure all children (they already have their layout.w/h set)
                 for (auto &c : node->children)
                 {
                     if (c->style.position == Position::Absolute)
                         continue;
-                    float mt = (c->style.marginTop != 0) ? c->style.marginTop : c->style.margin;
-                    float mb = (c->style.marginBottom != 0) ? c->style.marginBottom : c->style.margin;
-                    float ml = (c->style.marginLeft != 0) ? c->style.marginLeft : c->style.margin;
-                    float mr = (c->style.marginRight != 0) ? c->style.marginRight : c->style.margin;
+                    const float mt = resolveSide(c->style.marginTop,    c->style.margin);
+                    const float mb = resolveSide(c->style.marginBottom, c->style.margin);
+                    const float ml = resolveSide(c->style.marginLeft,   c->style.margin);
+                    const float mr = resolveSide(c->style.marginRight,  c->style.margin);
 
                     if (s.flexDirection == FlexDirection::Column)
                     {
@@ -50,19 +55,17 @@ namespace Bokken
                     }
                 }
 
-                float desiredW = contentW + pL + pR;
-                float desiredH = contentH + pT + pB;
+                const float desiredW = contentW + pL + pR;
+                const float desiredH = contentH + pT + pB;
 
-                float limitW = node->layout.w;
-                float limitH = node->layout.h;
+                const float limitW = node->layout.w;
+                const float limitH = node->layout.h;
 
-                // Clamp to available space if no fixed size
                 if (s.width <= 0 && !s.widthIsPercent)
                     node->layout.w = std::min(desiredW, limitW);
                 if (s.height <= 0 && !s.heightIsPercent)
                     node->layout.h = std::min(desiredH, limitH);
 
-                // No visual scale clamping here — that's for animations only
                 node->visualScale = 1.0f;
             }
 
@@ -70,289 +73,257 @@ namespace Bokken
             {
                 const auto &s = node->style;
 
-                // 1. Resolve effective padding
-                float pT = (s.paddingTop != 0) ? s.paddingTop : s.padding;
-                float pL = (s.paddingLeft != 0) ? s.paddingLeft : s.padding;
-                float pR = (s.paddingRight != 0) ? s.paddingRight : s.padding;
-                float pB = (s.paddingBottom != 0) ? s.paddingBottom : s.padding;
+                const float pT = resolveSide(s.paddingTop,    s.padding);
+                const float pL = resolveSide(s.paddingLeft,   s.padding);
+                const float pR = resolveSide(s.paddingRight,  s.padding);
+                const float pB = resolveSide(s.paddingBottom, s.padding);
 
-                // 2. Gather non-absolute children and separate fixed from flexible
                 struct ChildInfo
                 {
                     std::shared_ptr<Node> node;
-                    float mt, mb, ml, mr; // margins
-                    float mainSize;       // size along main axis (height for column, width for row)
-                    float crossSize;      // size along cross axis
-                    float flex;           // flex-grow factor
+                    float mt, mb, ml, mr;
+                    float mainSize;
+                    float crossSize;
+                    float flex;
                 };
                 std::vector<ChildInfo> children;
-                float totalMainFixed = 0.0f; // sum of (mainSize + main margins) for fixed children
+                float totalMainFixed = 0.0f;
                 float totalFlex = 0.0f;
-                float maxCross = 0.0f; // max cross size (for container sizing if needed)
+                float maxCross = 0.0f;
 
                 for (auto &c : node->children)
                 {
-                    if (c->style.position == Position::Absolute)
-                        continue;
+                    if (c->style.position == Position::Absolute) continue;
 
                     ChildInfo info;
                     info.node = c;
-                    info.mt = (c->style.marginTop != 0) ? c->style.marginTop : c->style.margin;
-                    info.mb = (c->style.marginBottom != 0) ? c->style.marginBottom : c->style.margin;
-                    info.ml = (c->style.marginLeft != 0) ? c->style.marginLeft : c->style.margin;
-                    info.mr = (c->style.marginRight != 0) ? c->style.marginRight : c->style.margin;
+                    info.mt   = resolveSide(c->style.marginTop,    c->style.margin);
+                    info.mb   = resolveSide(c->style.marginBottom, c->style.margin);
+                    info.ml   = resolveSide(c->style.marginLeft,   c->style.margin);
+                    info.mr   = resolveSide(c->style.marginRight,  c->style.margin);
                     info.flex = c->style.flex;
 
                     if (s.flexDirection == FlexDirection::Column)
                     {
                         info.mainSize = c->layout.h;
                         info.crossSize = c->layout.w;
-                        float mainMargin = info.mt + info.mb;
-                        if (info.flex > 0)
-                            totalFlex += info.flex;
-                        else
-                            totalMainFixed += info.mainSize + mainMargin;
+                        const float mainMargin = info.mt + info.mb;
+                        if (info.flex > 0) totalFlex += info.flex;
+                        else               totalMainFixed += info.mainSize + mainMargin;
                         maxCross = std::max(maxCross, info.crossSize + info.ml + info.mr);
                     }
-                    else // Row
+                    else
                     {
                         info.mainSize = c->layout.w;
                         info.crossSize = c->layout.h;
-                        float mainMargin = info.ml + info.mr;
-                        if (info.flex > 0)
-                            totalFlex += info.flex;
-                        else
-                            totalMainFixed += info.mainSize + mainMargin;
+                        const float mainMargin = info.ml + info.mr;
+                        if (info.flex > 0) totalFlex += info.flex;
+                        else               totalMainFixed += info.mainSize + mainMargin;
                         maxCross = std::max(maxCross, info.crossSize + info.mt + info.mb);
                     }
                     children.push_back(info);
                 }
 
-                // 3. Calculate remaining space along main axis
-                float containerMainSize = (s.flexDirection == FlexDirection::Column)
-                                              ? node->layout.h - pT - pB
-                                              : node->layout.w - pL - pR;
-                float remainingMain = containerMainSize - totalMainFixed;
+                const float containerMainSize = (s.flexDirection == FlexDirection::Column)
+                    ? node->layout.h - pT - pB : node->layout.w - pL - pR;
+                const float remainingMain = containerMainSize - totalMainFixed;
 
-                // 4. Distribute remaining space to flexible children
                 if (totalFlex > 0 && remainingMain > 0)
                 {
                     for (auto &info : children)
                     {
                         if (info.flex > 0)
                         {
-                            float extra = remainingMain * (info.flex / totalFlex);
+                            const float extra = remainingMain * (info.flex / totalFlex);
                             info.mainSize += extra;
-                            // Update the actual node's layout size
                             if (s.flexDirection == FlexDirection::Column)
                                 info.node->layout.h = info.mainSize;
                             else
                                 info.node->layout.w = info.mainSize;
                         }
                     }
-                    // Recalculate total main size after flex distribution
                     totalMainFixed = 0.0f;
                     for (auto &info : children)
                     {
-                        float mainMargin = (s.flexDirection == FlexDirection::Column)
-                                               ? info.mt + info.mb
-                                               : info.ml + info.mr;
+                        const float mainMargin = (s.flexDirection == FlexDirection::Column)
+                            ? info.mt + info.mb : info.ml + info.mr;
                         totalMainFixed += info.mainSize + mainMargin;
                     }
                 }
 
-                // 5. Determine starting position based on justifyContent
                 float startX = node->layout.x + pL;
                 float startY = node->layout.y + pT;
 
                 if (s.justifyContent == Align::Center)
                 {
-                    if (s.flexDirection == FlexDirection::Column)
-                        startY += (containerMainSize - totalMainFixed) / 2.0f;
-                    else
-                        startX += (containerMainSize - totalMainFixed) / 2.0f;
+                    if (s.flexDirection == FlexDirection::Column) startY += (containerMainSize - totalMainFixed) / 2.0f;
+                    else                                          startX += (containerMainSize - totalMainFixed) / 2.0f;
                 }
                 else if (s.justifyContent == Align::End)
                 {
-                    if (s.flexDirection == FlexDirection::Column)
-                        startY += (containerMainSize - totalMainFixed);
-                    else
-                        startX += (containerMainSize - totalMainFixed);
+                    if (s.flexDirection == FlexDirection::Column) startY += (containerMainSize - totalMainFixed);
+                    else                                          startX += (containerMainSize - totalMainFixed);
                 }
-                // Align::Start (default) keeps startY/startX unchanged
 
-                float currentX = startX;
-                float currentY = startY;
+                float currentX = startX, currentY = startY;
 
-                // 6. Position children
                 for (auto &info : children)
                 {
                     auto &child = info.node;
                     if (s.flexDirection == FlexDirection::Column)
                     {
-                        // Cross-axis (horizontal) alignment
-                        float contentLeft = node->layout.x + pL;
-                        float contentRight = node->layout.x + node->layout.w - pR;
-                        float contentWidth = contentRight - contentLeft;
+                        const float contentLeft  = node->layout.x + pL;
+                        const float contentRight = node->layout.x + node->layout.w - pR;
+                        const float contentWidth = contentRight - contentLeft;
 
+                        // Pixel-snap cross-axis position to avoid fractional
+                        // offsets that cascade into child text rendering.
                         if (s.alignItems == Align::Center)
-                            child->layout.x = contentLeft + (contentWidth - child->layout.w) / 2.0f;
+                            child->layout.x = std::round(contentLeft + (contentWidth - child->layout.w) / 2.0f);
                         else if (s.alignItems == Align::End)
-                            child->layout.x = contentRight - child->layout.w - info.mr;
-                        else // Start
-                            child->layout.x = contentLeft + info.ml;
+                            child->layout.x = std::round(contentRight - child->layout.w - info.mr);
+                        else
+                            child->layout.x = std::round(contentLeft + info.ml);
 
-                        // Main-axis (vertical)
-                        child->layout.y = currentY + info.mt;
+                        child->layout.y = std::round(currentY + info.mt);
                         currentY += child->layout.h + info.mt + info.mb;
                     }
-                    else // Row
+                    else
                     {
-                        // Cross-axis (vertical) alignment
-                        float contentTop = node->layout.y + pT;
-                        float contentBottom = node->layout.y + node->layout.h - pB;
-                        float contentHeight = contentBottom - contentTop;
+                        const float contentTop    = node->layout.y + pT;
+                        const float contentBottom = node->layout.y + node->layout.h - pB;
+                        const float contentHeight = contentBottom - contentTop;
 
                         if (s.alignItems == Align::Center)
-                            child->layout.y = contentTop + (contentHeight - child->layout.h) / 2.0f;
+                            child->layout.y = std::round(contentTop + (contentHeight - child->layout.h) / 2.0f);
                         else if (s.alignItems == Align::End)
-                            child->layout.y = contentBottom - child->layout.h - info.mb;
-                        else // Start
-                            child->layout.y = contentTop + info.mt;
+                            child->layout.y = std::round(contentBottom - child->layout.h - info.mb);
+                        else
+                            child->layout.y = std::round(contentTop + info.mt);
 
-                        // Main-axis (horizontal)
-                        child->layout.x = currentX + info.ml;
+                        child->layout.x = std::round(currentX + info.ml);
                         currentX += child->layout.w + info.ml + info.mr;
                     }
 
-                    // Recursively layout child
-                    if (child->onLayout)
-                        child->onLayout(child);
+                    if (child->onLayout) child->onLayout(child);
                 }
 
-                // 7. Handle absolute positioned children
+                // ── Absolute-positioned children ──
+                //
+                // top/bottom/left/right default to NaN ("not pinned"). We
+                // probe each via isSet(); the previous `!= 0` test made it
+                // impossible to pin a child to top:0 / left:0 / etc.
+                //
+                // Positions are pixel-snapped to prevent fractional offsets
+                // from cascading into text rendering.
                 for (auto &child : node->children)
                 {
-                    if (child->style.position == Position::Absolute)
+                    if (child->style.position != Position::Absolute) continue;
+
+                    const float left   = child->style.left;
+                    const float right  = child->style.right;
+                    const float top    = child->style.top;
+                    const float bottom = child->style.bottom;
+
+                    if (isSet(left) && isSet(right))
                     {
-                        // Resolve left/right/top/bottom
-                        float left = child->style.left;
-                        float right = child->style.right;
-                        float top = child->style.top;
-                        float bottom = child->style.bottom;
-
-                        // If both left and right are set, stretch width
-                        if (left != 0 && right != 0)
-                        {
-                            child->layout.x = node->layout.x + left;
-                            child->layout.w = node->layout.w - left - right;
-                        }
-                        else if (left != 0)
-                        {
-                            child->layout.x = node->layout.x + left;
-                        }
-                        else if (right != 0)
-                        {
-                            child->layout.x = node->layout.x + node->layout.w - child->layout.w - right;
-                        }
-
-                        // Vertical positioning
-                        if (top != 0 && bottom != 0)
-                        {
-                            child->layout.y = node->layout.y + top;
-                            child->layout.h = node->layout.h - top - bottom;
-                        }
-                        else if (top != 0)
-                        {
-                            child->layout.y = node->layout.y + top;
-                        }
-                        else if (bottom != 0)
-                        {
-                            child->layout.y = node->layout.y + node->layout.h - child->layout.h - bottom;
-                        }
-
-                        if (child->onLayout)
-                            child->onLayout(child);
+                        child->layout.x = std::round(node->layout.x + left);
+                        child->layout.w = std::round(node->layout.w - left - right);
                     }
+                    else if (isSet(left))
+                    {
+                        child->layout.x = std::round(node->layout.x + left);
+                    }
+                    else if (isSet(right))
+                    {
+                        child->layout.x = std::round(node->layout.x + node->layout.w - child->layout.w - right);
+                    }
+
+                    if (isSet(top) && isSet(bottom))
+                    {
+                        child->layout.y = std::round(node->layout.y + top);
+                        child->layout.h = std::round(node->layout.h - top - bottom);
+                    }
+                    else if (isSet(top))
+                    {
+                        child->layout.y = std::round(node->layout.y + top);
+                    }
+                    else if (isSet(bottom))
+                    {
+                        child->layout.y = std::round(node->layout.y + node->layout.h - child->layout.h - bottom);
+                    }
+
+                    if (child->onLayout) child->onLayout(child);
                 }
             }
 
             std::shared_ptr<Node> View::toNode()
             {
                 auto node = std::make_shared<Node>("View");
-
                 node->children = m_children;
                 node->style = m_style;
-
                 node->onCompute = &computeNode;
                 node->onLayout = &layoutNode;
-
                 return node;
             }
 
-            void View::draw(SDL_Renderer *renderer, std::shared_ptr<Node> node)
+            void View::draw(Renderer::SpriteBatcher &batcher,
+                             std::shared_ptr<Node> node, int layer)
             {
-                if (!renderer || !node)
-                    return;
+                if (!node) return;
 
-                SDL_FRect rect = {node->layout.x, node->layout.y, node->layout.w, node->layout.h};
-
-                // Visual scaling around center – DO NOT MODIFY node->layout!
+                // Apply visual scale (hover/active animations) without
+                // mutating layout — same trick as before.
+                float x = node->layout.x;
+                float y = node->layout.y;
+                float w = node->layout.w;
+                float h = node->layout.h;
                 if (node->visualScale != 1.0f)
                 {
-                    float cx = rect.x + rect.w * 0.5f;
-                    float cy = rect.y + rect.h * 0.5f;
-                    rect.w *= node->visualScale;
-                    rect.h *= node->visualScale;
-                    rect.x = cx - rect.w * 0.5f;
-                    rect.y = cy - rect.h * 0.5f;
+                    const float cx = x + w * 0.5f;
+                    const float cy = y + h * 0.5f;
+                    w *= node->visualScale;
+                    h *= node->visualScale;
+                    x = cx - w * 0.5f;
+                    y = cy - h * 0.5f;
                 }
 
-                // Extract colors once
-                uint32_t bgColor = node->style.backgroundColor;
-                Uint8 r = (bgColor >> 24) & 0xFF;
-                Uint8 g = (bgColor >> 16) & 0xFF;
-                Uint8 b = (bgColor >> 8) & 0xFF;
-                Uint8 a = (bgColor >> 0) & 0xFF;
+                const uint32_t bg = node->style.backgroundColor;
+                const uint32_t bd = node->style.borderColor;
+                const float    bw = node->style.borderWidth;
+                const bool hasBorder = (bw > 0.0f && (bd & 0xFF) > 0);
+                const bool hasBg     = ((bg & 0xFF) > 0);
 
-                uint32_t borderColor = node->style.borderColor;
-                Uint8 br = (borderColor >> 24) & 0xFF;
-                Uint8 bgC = (borderColor >> 16) & 0xFF; // renamed to avoid conflict with background 'g'
-                Uint8 bb = (borderColor >> 8) & 0xFF;
-                Uint8 ba = (borderColor >> 0) & 0xFF;
-
-                float bw = node->style.borderWidth;
-
-                // Decide draw order based on border presence
-                bool hasBorder = (bw > 0.0f && ba > 0);
-                bool hasBackground = (a > 0);
-
+                // ── Border drawing ──
+                //
+                // The previous version drew the full bounding rect in border
+                // colour and then layered the bg rect on top, relying on the
+                // 1-px (or `bw`-px) ring being visible. That works ONLY if
+                // there's a background — `borderWidth: 2` with a transparent
+                // background produced a fully-filled rectangle in the border
+                // colour, which was clearly wrong.
+                //
+                // We now draw the border as four edge rects so the inside
+                // is left untouched. Then the background, if any, layers
+                // inside the inset.
                 if (hasBorder)
                 {
-                    // Draw the border as a filled rectangle (outermost)
-                    SDL_SetRenderDrawColor(renderer, br, bgC, bb, ba);
-                    SDL_RenderFillRect(renderer, &rect);
+                    // Top, bottom, left, right edges. Corners belong to the
+                    // top/bottom edges so the verticals are inset by `bw`.
+                    batcher.drawRect(x,           y,           w,            bw,           bd, layer);
+                    batcher.drawRect(x,           y + h - bw,  w,            bw,           bd, layer);
+                    batcher.drawRect(x,           y + bw,      bw,           h - 2.0f * bw, bd, layer);
+                    batcher.drawRect(x + w - bw,  y + bw,      bw,           h - 2.0f * bw, bd, layer);
 
-                    // Draw the background inset by border width
-                    if (hasBackground)
-                    {
-                        SDL_FRect innerRect = {
-                            rect.x + bw,
-                            rect.y + bw,
-                            rect.w - 2 * bw,
-                            rect.h - 2 * bw};
-                        SDL_SetRenderDrawColor(renderer, r, g, b, a);
-                        SDL_RenderFillRect(renderer, &innerRect);
-                    }
+                    if (hasBg)
+                        batcher.drawRect(x + bw, y + bw, w - 2.0f * bw, h - 2.0f * bw, bg, layer + 1);
                 }
-                else if (hasBackground)
+                else if (hasBg)
                 {
-                    // No border, just background
-                    SDL_SetRenderDrawColor(renderer, r, g, b, a);
-                    SDL_RenderFillRect(renderer, &rect);
+                    batcher.drawRect(x, y, w, h, bg, layer);
                 }
             }
 
-        } // namespace Components
-    } // namespace Canvas
-} // namespace Bokken
+        }
+    }
+}

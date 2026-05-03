@@ -16,7 +16,7 @@ namespace Bokken
             class GameObject : public Base
             {
             public:
-                GameObject(SDL_Renderer *renderer, Bokken::AssetPack *assets)
+                GameObject(SDL_Renderer *renderer, AssetPack *assets)
                     : Base("bokken/gameObject"), m_renderer(renderer), m_assets(assets) {}
 
                 int declare(JSContext *ctx, JSModuleDef *m) override;
@@ -28,7 +28,7 @@ namespace Bokken
 
             private:
                 SDL_Renderer *m_renderer;
-                Bokken::AssetPack *m_assets;
+                AssetPack *m_assets;
 
                 static inline JSClassID s_class_id = 0;
                 static inline JSClassID s_rigidbody_class_id = 0;
@@ -46,9 +46,6 @@ namespace Bokken
 
                 static JSValue wrap_rigidbody(JSContext *ctx, Bokken::GameObject::Rigidbody *rb);
                 static JSValue wrap_transform(JSContext *ctx, Bokken::GameObject::Transform *t);
-
-                static void draw_cube(const glm::mat4 &mvp);
-                static void parse_options(JSContext *, JSValue, Bokken::GameObject::Base *);
             };
         }
     }

@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-# OBJC is required on Apple because PhysFS pulls in Objective-C platform glue.
+# OBJC is required on Apple because PhysFS pulls in Objective-C platform
+# glue. The engine library is what actually consumes PhysFS — we only need
+# OBJC enabled here because the consumer's own platform glue (darwin/main.cpp)
+# may use Objective-C frameworks like CoreFoundation.
 if(APPLE)
     project(NeonKatana LANGUAGES CXX C OBJC)
 else()
@@ -12,10 +15,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Engine paths
 set(ENGINE_ROOT    "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-set(ENGINE_SRC     "${ENGINE_ROOT}/src")
 set(ENGINE_BUILD   "${ENGINE_ROOT}/build")
 set(ENGINE_BIN     "${ENGINE_BUILD}/bin")
-set(THIRD_PARTY    "${ENGINE_ROOT}/third_party")
+set(ENGINE_INCLUDE "${ENGINE_ROOT}/include")
 
 # Locate the pre-built engine library
 if(APPLE)
@@ -43,44 +45,29 @@ else()
     file(GLOB PLATFORM_SOURCES "linux/*.cpp")
 endif()
 
-# Executable
-# Use WIN32 flag on Windows to allow for WinMain entry if needed, 
-# though your main.cpp currently uses the Console subsystem.
-if(WIN32)
-    add_executable(${PROJECT_NAME} ${COMMON_SOURCES} ${PLATFORM_SOURCES})
-else()
-    add_executable(${PROJECT_NAME} ${COMMON_SOURCES} ${PLATFORM_SOURCES})
-endif()
+add_executable(${PROJECT_NAME} ${COMMON_SOURCES} ${PLATFORM_SOURCES})
 
-# Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    "${ENGINE_SRC}"
-    "${THIRD_PARTY}/json-src/include"
-    "${THIRD_PARTY}/physfs-src/src"
-    "${THIRD_PARTY}/sdl3-src/include"
-    "${THIRD_PARTY}/sdl3-build/include-revision"
-    "${THIRD_PARTY}/sdl3_ttf-src/include"
-    "${THIRD_PARTY}/quickjs_ng-src"
-    "${THIRD_PARTY}/glm-src/"
+    "${ENGINE_INCLUDE}"
 )
 
-# Link Section
-
+# Link the engine library. That's the entire dependency.
 target_link_libraries(${PROJECT_NAME} PRIVATE "${ENGINE_LIB}")
 
 if(APPLE)
-    # Fixes the Undefined Symbols error for CFBundle/CFURL calls
+    # CoreFoundation is used by darwin/main.cpp directly (CFBundle for the
+    # working-directory fix when launched from a .app), not by the engine.
     target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreFoundation")
-    
+
     set_target_properties(${PROJECT_NAME} PROPERTIES
         BUILD_RPATH "${ENGINE_BIN}"
         INSTALL_RPATH "@executable_path"
     )
 elseif(WIN32)
-    # Standard Windows system libs often required when bypassing SDL_main
+    # Standard Windows system libs often required when bypassing SDL_main.
     target_link_libraries(${PROJECT_NAME} PRIVATE shell32 user32 gdi32)
 elseif(UNIX)
-    # Linux RPATH and math/thread libs
+    # Linux RPATH and math/thread libs.
     target_link_libraries(${PROJECT_NAME} PRIVATE m pthread dl)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         BUILD_RPATH "${ENGINE_BIN}"

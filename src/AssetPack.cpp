@@ -15,7 +15,7 @@ namespace Bokken
         {
             if (!PHYSFS_init(nullptr))
             {
-                fprintf(stderr, "[AssetPack] PHYSFS_init failed: %s\n",
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] PHYSFS_init failed: %s\n",
                         PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
             }
         }
@@ -57,7 +57,7 @@ namespace Bokken
         if (!PHYSFS_mount(finalPath.c_str(), mountPoint.c_str(), 1))
         {
             PHYSFS_ErrorCode err = PHYSFS_getLastErrorCode();
-            fprintf(stderr, "[AssetPack] Failed to mount:\n"
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] Failed to mount:\n"
                             "  Requested: %s\n"
                             "  Resolved:  %s\n"
                             "  Error:     %s\n",
@@ -108,7 +108,7 @@ namespace Bokken
         PHYSFS_File *f = PHYSFS_openRead(virtualPath.c_str());
         if (!f)
         {
-            fprintf(stderr, "[AssetPack] readBytes: cannot open '%s': %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] readBytes: cannot open '%s': %s\n",
                     virtualPath.c_str(),
                     PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
             return {};
@@ -117,7 +117,7 @@ namespace Bokken
         PHYSFS_sint64 fileLen = PHYSFS_fileLength(f);
         if (fileLen < 0)
         {
-            fprintf(stderr, "[AssetPack] readBytes: unknown length for '%s'\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] readBytes: unknown length for '%s'\n",
                     virtualPath.c_str());
             PHYSFS_close(f);
             return {};
@@ -129,7 +129,7 @@ namespace Bokken
 
         if (read != fileLen)
         {
-            fprintf(stderr, "[AssetPack] readBytes: short read on '%s' (%lld of %lld)\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] readBytes: short read on '%s' (%lld of %lld)\n",
                     virtualPath.c_str(), (long long)read, (long long)fileLen);
             return {};
         }
@@ -173,7 +173,7 @@ namespace Bokken
 
         if (!PHYSFS_seek(d->file, static_cast<PHYSFS_uint64>(target)))
         {
-            fprintf(stderr, "[AssetPack] io_seek failed on '%s': %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] io_seek failed on '%s': %s\n",
                     d->virtualPath.c_str(),
                     PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
             return -1;
@@ -191,7 +191,7 @@ namespace Bokken
         {
             if (status)
                 *status = SDL_IO_STATUS_ERROR;
-            fprintf(stderr, "[AssetPack] io_read error on '%s': %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] io_read error on '%s': %s\n",
                     d->virtualPath.c_str(),
                     PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
             return 0;
@@ -241,7 +241,7 @@ namespace Bokken
         SDL_IOStream *io = SDL_OpenIO(&iface, data);
         if (!io)
         {
-            fprintf(stderr, "[AssetPack] SDL_OpenIO failed for '%s': %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] SDL_OpenIO failed for '%s': %s\n",
                     virtualPath.c_str(), SDL_GetError());
             PHYSFS_close(file);
             delete data;
@@ -258,7 +258,7 @@ namespace Bokken
         PHYSFS_File *f = PHYSFS_openRead(virtualPath.c_str());
         if (!f)
         {
-            fprintf(stderr, "[AssetPack] openIOStream: cannot open '%s': %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] openIOStream: cannot open '%s': %s\n",
                     virtualPath.c_str(),
                     PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
             return nullptr;

@@ -1,14 +1,21 @@
-// Platform-specific overrides
-#define BOKKEN_PROJECT_PATH "project.bokken"
-#define BOKKEN_SCRIPT_PACK  "assets/scripts.assetpack"
-#define BOKKEN_ENVIRONMENT  "development"
-#define BOKKEN_FIXED_HZ     60
+/**
+ * NeonKatana — macOS entry point.
+ *
+ * Just a thin .app-bundle aware wrapper around Bokken::entryPoint.
+ * When the binary is launched from inside a .app bundle the working
+ * directory is something arbitrary (often "/"), so we cd into the
+ * bundle's Resources/ before handing control to the engine — that way
+ * relative paths like "project.bokken" resolve correctly.
+ */
 
 #include <CoreFoundation/CoreFoundation.h>
-#include "../../../src/Bokken.hpp"
+#include <unistd.h>
+#include <climits>
 
-int main(int argc, char* argv[]) {
-    // Fixes the working directory if launched from an .app bundle
+#include <Bokken.hpp>
+
+int main(int argc, char *argv[])
+{
     char path[PATH_MAX];
 
     CFBundleRef mainBundle = CFBundleGetMainBundle();

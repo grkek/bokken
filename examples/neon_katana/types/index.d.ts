@@ -1,4 +1,5 @@
 // types/bokken/index.d.ts
+export * from "./audio";
 export * from "./canvas";
 export * from "./gameObject";
 export * from "./log";

@@ -21,7 +21,7 @@ namespace Bokken
             /** Layout & Flexbox **/
 
             /* Direction of child flow (Default: Column) */
-            Bokken::Canvas::FlexDirection flexDirection = Bokken::Canvas::FlexDirection::Column;
+            FlexDirection flexDirection = FlexDirection::Column;
 
             /* Growth factor relative to siblings */
             float flex = 0.0f;

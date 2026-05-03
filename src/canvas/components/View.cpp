@@ -8,17 +8,17 @@ namespace Bokken
         namespace Components
         {
 
-            void View::addChild(std::shared_ptr<Bokken::Canvas::Node> child)
+            void View::addChild(std::shared_ptr<Node> child)
             {
                 m_children.push_back(std::move(child));
             }
 
-            void View::setStyle(const Bokken::Canvas::SimpleStyleSheet &style)
+            void View::setStyle(const SimpleStyleSheet &style)
             {
                 m_style = style;
             }
 
-            void View::computeNode(std::shared_ptr<Bokken::Canvas::Node> node, Bokken::AssetPack *assets)
+            void View::computeNode(std::shared_ptr<Node> node, AssetPack *assets)
             {
                 const auto &s = node->style;
                 float pT = (s.paddingTop != 0) ? s.paddingTop : s.padding;
@@ -66,7 +66,7 @@ namespace Bokken
                 node->visualScale = 1.0f;
             }
 
-            void View::layoutNode(std::shared_ptr<Bokken::Canvas::Node> node)
+            void View::layoutNode(std::shared_ptr<Node> node)
             {
                 const auto &s = node->style;
 
@@ -277,9 +277,9 @@ namespace Bokken
                 }
             }
 
-            std::shared_ptr<Bokken::Canvas::Node> View::toNode()
+            std::shared_ptr<Node> View::toNode()
             {
-                auto node = std::make_shared<Bokken::Canvas::Node>("View");
+                auto node = std::make_shared<Node>("View");
 
                 node->children = m_children;
                 node->style = m_style;

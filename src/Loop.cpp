@@ -17,7 +17,7 @@ namespace Bokken
         }
         catch (...)
         {
-            fprintf(stderr, "[Bokken] Unknown environment '%s', defaulting to development\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Unknown environment '%s', defaulting to development\n",
                     environment.c_str());
             environmentConfiguration = &configuration.get_environment(false);
         }
@@ -29,7 +29,7 @@ namespace Bokken
         // SDL3 init
         if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         {
-            fprintf(stderr, "[Bokken] SDL_Init failed: %s\n", SDL_GetError());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_Init failed: %s\n", SDL_GetError());
             return false;
         }
 
@@ -76,7 +76,7 @@ namespace Bokken
 
         if (!m_window)
         {
-            fprintf(stderr, "[Bokken] SDL_CreateWindow failed: %s\n", SDL_GetError());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_CreateWindow failed: %s\n", SDL_GetError());
             TTF_Quit();
             SDL_Quit();
             return false;
@@ -88,7 +88,7 @@ namespace Bokken
         m_renderer = SDL_CreateRenderer(m_window, NULL); // NULL picks the default driver (Metal/DirectX/Vulkan)
         if (!m_renderer)
         {
-            fprintf(stderr, "[Bokken] SDL_CreateRenderer failed: %s\n", SDL_GetError());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_CreateRenderer failed: %s\n", SDL_GetError());
             SDL_DestroyWindow(m_window);
             TTF_Quit();
             SDL_Quit();
@@ -119,7 +119,7 @@ namespace Bokken
                                           scriptingEngineConfiguration.runtime.stackSizeKb,
                                           scriptingEngineConfiguration.runtime.gcThresholdKb))
         {
-            fprintf(stderr, "[Bokken] ScriptingEngine::init() failed\n");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] ScriptingEngine::init() failed\n");
             SDL_DestroyWindow(m_window);
             TTF_Quit();
             SDL_Quit();
@@ -147,7 +147,7 @@ namespace Bokken
     {
         if (!m_initialised)
         {
-            fprintf(stderr, "[Bokken] loadBytecode() called before init()\n");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] loadBytecode() called before init()\n");
             return false;
         }
         return this->scriptingEngine().loadBytecode(data, len, name);
@@ -163,7 +163,7 @@ namespace Bokken
 
         if (!engine.isReady())
         {
-            fprintf(stderr, "[Bokken] ScriptingEngine is not ready!\n");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] ScriptingEngine is not ready!\n");
             return;
         }
 
@@ -185,7 +185,7 @@ namespace Bokken
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            Bokken::Scripting::Modules::Canvas::handleEvent(e);
+            Scripting::Modules::Canvas::handleEvent(e);
 
             switch (e.type)
             {
@@ -228,12 +228,12 @@ namespace Bokken
         // Variable update
         engine.callOnUpdate(dt);
 
-        Bokken::Scripting::Modules::Canvas::update(static_cast<float>(dt));
+        Scripting::Modules::Canvas::update(static_cast<float>(dt));
 
         SDL_SetRenderDrawColor(m_renderer, 71, 92, 108, 255);
         SDL_RenderClear(m_renderer);
 
-        Bokken::Scripting::Modules::Canvas::present();
+        Scripting::Modules::Canvas::present();
 
         SDL_RenderPresent(m_renderer);
 
@@ -260,7 +260,7 @@ namespace Bokken
             m_window = nullptr;
         }
 
-        Bokken::Scripting::Modules::Canvas::clear_font_cache();
+        Scripting::Modules::Canvas::clear_font_cache();
 
         if (m_renderer)
         {

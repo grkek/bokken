@@ -24,10 +24,25 @@ namespace Bokken
                     auto make_log_fn = [](JSContext *ctx, JSValueConst, int argc,
                                           JSValueConst *argv, int magic) -> JSValue
                     {
-                        const char *levels[] = {"DEBUG", "INFO", "WARN", "ERROR"};
-                        const char *msg = JS_ToCString(ctx, argv[0]);
-                        printf("[%s] %s\n", levels[magic], msg ? msg : "");
-                        JS_FreeCString(ctx, msg);
+                        const char *message = JS_ToCString(ctx, argv[0]);
+
+                        switch (magic)
+                        {
+                        case 0:
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+                            break;
+                        case 1:
+                            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+                            break;
+                        case 2:
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+                            break;
+                        case 3:
+                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+                            break;
+                        }
+
+                        JS_FreeCString(ctx, message);
                         return JS_UNDEFINED;
                     };
 
@@ -41,6 +56,7 @@ namespace Bokken
                                       JS_NewCFunctionMagic(ctx, make_log_fn, "error", 1, JS_CFUNC_generic_magic, 3));
 
                     JS_SetModuleExport(ctx, m, "default", defaultExport);
+
                     return 0;
                 }
             };

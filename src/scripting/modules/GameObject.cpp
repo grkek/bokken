@@ -233,36 +233,6 @@ namespace Bokken
                 return obj;
             }
 
-            void GameObject::draw_cube(const glm::mat4 &mvp)
-            {
-                // Define 8 corners of a cube (-1 to 1)
-                glm::vec4 vertices[] = {
-                    {-1, -1, -1, 1}, {1, -1, -1, 1}, {1, 1, -1, 1}, {-1, 1, -1, 1}, {-1, -1, 1, 1}, {1, -1, 1, 1}, {1, 1, 1, 1}, {-1, 1, 1, 1}};
-
-                int w, h;
-                SDL_GetWindowSize(SDL_GetRenderWindow(s_renderer), &w, &h);
-                std::vector<SDL_FPoint> points(8);
-
-                for (int i = 0; i < 8; ++i)
-                {
-                    glm::vec4 clip = mvp * vertices[i];
-                    if (clip.w != 0)
-                        clip /= clip.w; // Perspective divide
-
-                    points[i].x = (clip.x + 1.0f) * 0.5f * (float)w;
-                    points[i].y = (1.0f - clip.y) * 0.5f * (float)h; // Flip Y for SDL
-                }
-
-                // Draw Wireframe (Edges)
-                SDL_SetRenderDrawColor(s_renderer, 0, 255, 0, 255); // Green Cube
-                int indices[] = {0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7};
-                for (int i = 0; i < 24; i += 2)
-                {
-                    SDL_RenderLine(s_renderer, points[indices[i]].x, points[indices[i]].y,
-                                   points[indices[i + 1]].x, points[indices[i + 1]].y);
-                }
-            }
-
             // Engine hooks — drive the engine registry, not the module
             void GameObject::update(float dt)
             {
@@ -297,8 +267,7 @@ namespace Bokken
 
                     glm::mat4 mvp = projection * view * t->getMatrix();
 
-                    if (t->mesh == Bokken::GameObject::Mesh::Cube)
-                        draw_cube(mvp);
+                    // TODO: Draw based on mesh type
                 }
             }
         }

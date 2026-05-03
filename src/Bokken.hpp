@@ -20,6 +20,7 @@
 
 // Built-in modules
 
+#include "scripting/modules/Audio.hpp"
 #include "scripting/modules/Canvas.hpp"
 #include "scripting/modules/GameObject.hpp"
 #include "scripting/modules/Log.hpp"
@@ -73,7 +74,7 @@ namespace Bokken
         std::string configText = readTextFile(BOKKEN_PROJECT_PATH);
         if (configText.empty())
         {
-            fprintf(stderr, "[Bokken] Could not read project file: %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Could not read project file: %s\n",
                     BOKKEN_PROJECT_PATH);
             PHYSFS_deinit();
             return EXIT_FAILURE;
@@ -87,7 +88,7 @@ namespace Bokken
         }
         catch (const std::exception &ex)
         {
-            fprintf(stderr, "[Bokken] Failed to parse project configuration: %s\n", ex.what());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to parse project configuration: %s\n", ex.what());
             PHYSFS_deinit();
             return EXIT_FAILURE;
         }
@@ -103,7 +104,7 @@ namespace Bokken
         // Scripts asset pack
         if (!assets.mount(BOKKEN_SCRIPT_PACK, "/"))
         {
-            fprintf(stderr, "[Bokken] Failed to mount scripts asset pack: %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to mount scripts asset pack: %s\n",
                     BOKKEN_SCRIPT_PACK);
             return EXIT_FAILURE;
         }
@@ -111,7 +112,7 @@ namespace Bokken
         // Fonts asset pack
         if (!assets.mount("assets/fonts.assetpack", "/fonts"))
         {
-            fprintf(stderr, "[Bokken] Failed to mount fonts asset pack: %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to mount fonts asset pack: %s\n",
                     BOKKEN_SCRIPT_PACK);
             return EXIT_FAILURE;
         }
@@ -124,10 +125,11 @@ namespace Bokken
         }
 
         // 4. Register native modules
-        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::Log>());
-        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::Canvas>(loop.window(), loop.renderer(), &assets));
-        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::GameObject>(loop.renderer(), &assets));
-        loop.scriptingEngine().addModule(std::make_unique<Bokken::Scripting::Modules::Window>(loop.window()));
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Audio>());
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Canvas>(loop.window(), loop.renderer(), &assets));
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::GameObject>(loop.renderer(), &assets));
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Log>());
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Window>(loop.window()));
 
         // 5. Load script bytecode via SDL_IOStream
         //
@@ -136,7 +138,7 @@ namespace Bokken
         //    real filesystem directly — all I/O goes through the pack layer.
         if (!assets.exists(BOKKEN_ENTRY_SCRIPT))
         {
-            fprintf(stderr, "[Bokken] Entry script not found in pack: %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Entry script not found in pack: %s\n",
                     BOKKEN_ENTRY_SCRIPT);
             return EXIT_FAILURE;
         }
@@ -145,7 +147,7 @@ namespace Bokken
         SDL_IOStream *scriptIO = assets.openIOStream(BOKKEN_ENTRY_SCRIPT);
         if (!scriptIO)
         {
-            fprintf(stderr, "[Bokken] Failed to open entry script stream: %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to open entry script stream: %s\n",
                     BOKKEN_ENTRY_SCRIPT);
             return EXIT_FAILURE;
         }
@@ -156,7 +158,7 @@ namespace Bokken
         void *scriptRaw = SDL_LoadFile_IO(scriptIO, &scriptLen, true);
         if (!scriptRaw || scriptLen == 0)
         {
-            fprintf(stderr, "[Bokken] SDL_LoadFile_IO failed for entry script: %s\n",
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] SDL_LoadFile_IO failed for entry script: %s\n",
                     SDL_GetError());
             return EXIT_FAILURE;
         }
@@ -170,7 +172,7 @@ namespace Bokken
         if (!loop.loadBytecode(scriptData.data(), scriptData.size(),
                                BOKKEN_ENTRY_SCRIPT))
         {
-            fprintf(stderr, "[Bokken] Failed to load script bytecode.\n");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to load script bytecode.\n");
             return EXIT_FAILURE;
         }
 

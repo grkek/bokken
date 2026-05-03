@@ -54,7 +54,7 @@ namespace Bokken
              * Executed to determine the intrinsic size of the node based on its
              * content (e.g., measuring SDL_ttf string dimensions or child bounds).
              **/
-            std::function<void(std::shared_ptr<Node>, Bokken::AssetPack *)> onCompute = nullptr;
+            std::function<void(std::shared_ptr<Node>, AssetPack *)> onCompute = nullptr;
 
             /** * The Placement Phase (Top-Down).
              * Executed to calculate the absolute screen coordinates (x, y) of the node

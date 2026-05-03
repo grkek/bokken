@@ -26,7 +26,7 @@ namespace Bokken
             class Canvas : public Base
             {
             public:
-                Canvas(SDL_Window *window, SDL_Renderer *renderer, Bokken::AssetPack *assets)
+                Canvas(SDL_Window *window, SDL_Renderer *renderer, AssetPack *assets)
                     : Base("bokken/canvas"), m_assets(assets)
                 {
                     s_window = window;
@@ -73,8 +73,8 @@ namespace Bokken
                 static inline SDL_Window *s_window = nullptr;
                 static inline SDL_Renderer *s_renderer = nullptr;
 
-                Bokken::AssetPack *m_assets;
-                static inline Bokken::AssetPack *s_assets = nullptr;
+                AssetPack *m_assets;
+                static inline AssetPack *s_assets = nullptr;
 
                 static inline std::map<std::string, TTF_Font *> s_font_cache;
 

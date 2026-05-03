@@ -38,7 +38,7 @@ namespace Bokken
                 }
             }
 
-            fprintf(stderr, "[Bokken] Module not found: %s\n", name);
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Module not found: %s\n", name);
             return nullptr;
         }
 
@@ -50,7 +50,7 @@ namespace Bokken
             m_rt = JS_NewRuntime();
             if (!m_rt)
             {
-                fprintf(stderr, "[Bokken] Failed to create JSRuntime\n");
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to create JSRuntime\n");
                 return false;
             }
 
@@ -62,7 +62,7 @@ namespace Bokken
             m_ctx = JS_NewContext(m_rt);
             if (!m_ctx)
             {
-                fprintf(stderr, "[Bokken] Failed to create JSContext\n");
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Failed to create JSContext\n");
                 JS_FreeRuntime(m_rt);
                 m_rt = nullptr;
                 return false;
@@ -79,7 +79,7 @@ namespace Bokken
         {
             if (!m_ctx)
             {
-                fprintf(stderr, "[Bokken] addModule() called before init()\n");
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] addModule() called before init()\n");
                 return;
             }
             module->registerInto(m_ctx);
@@ -94,14 +94,14 @@ namespace Bokken
             JSValue object = JS_ReadObject(m_ctx, data, len, JS_READ_OBJ_BYTECODE);
             if (JS_IsException(object))
             {
-                fprintf(stderr, "[Bokken] Critical: Failed to parse bytecode for '%s'\n", name.c_str());
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Critical: Failed to parse bytecode for '%s'\n", name.c_str());
                 reportException("ReadObject: " + name);
                 return false;
             }
 
             if (JS_ResolveModule(m_ctx, object) != 0)
             {
-                fprintf(stderr, "[Bokken] Critical: Failed to resolve module '%s'\n", name.c_str());
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Critical: Failed to resolve module '%s'\n", name.c_str());
                 reportException("ResolveModule: " + name);
                 JS_FreeValue(m_ctx, object);
                 return false;
@@ -110,7 +110,7 @@ namespace Bokken
             JSValue result = JS_EvalFunction(m_ctx, object);
             if (JS_IsException(result))
             {
-                fprintf(stderr, "[Bokken] Critical: Module Evaluation/Linking failed for '%s'\n", name.c_str());
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Critical: Module Evaluation/Linking failed for '%s'\n", name.c_str());
                 reportException("EvalFunction: " + name);
                 JS_FreeValue(m_ctx, result);
                 return false;
@@ -150,7 +150,7 @@ namespace Bokken
                 {
                     mod->destroy();
                 }
-                
+
                 m_modules.clear();
 
                 JS_FreeContext(ctx);
@@ -234,8 +234,8 @@ namespace Bokken
             JSValue str = JS_ToString(m_ctx, exc);
             const char *msg = JS_ToCString(m_ctx, str);
 
-            fprintf(stderr, "Context: %s\n", context.c_str());
-            fprintf(stderr, "Message: %s\n", msg ? msg : "<unknown>");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Context: %s\n", context.c_str());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Message: %s\n", msg ? msg : "<unknown>");
 
             JS_FreeCString(m_ctx, msg);
             JS_FreeValue(m_ctx, str);
@@ -252,7 +252,7 @@ namespace Bokken
                         const char *cval = JS_ToCString(m_ctx, val);
                         if (cval)
                         {
-                            fprintf(stderr, "%s: %s\n", label, cval);
+                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s: %s\n", label, cval);
                             JS_FreeCString(m_ctx, cval);
                         }
                     }
@@ -277,13 +277,12 @@ namespace Bokken
                             s.replace(pos, 1, "\n    ");
                             pos += 5; // move past the newline and indentation
                         }
-                        fprintf(stderr, "Stack Trace:\n    %s\n", s.c_str());
+                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Stack Trace:\n    %s\n", s.c_str());
                         JS_FreeCString(m_ctx, stackStr);
                     }
                 }
                 JS_FreeValue(m_ctx, stack);
             }
-            fprintf(stderr, "-----------------------------\n\n");
 
             JS_FreeValue(m_ctx, exc);
         }

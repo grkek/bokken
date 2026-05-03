@@ -69,7 +69,7 @@ namespace Bokken
          * Access the scripting engine to register native modules.
          * Call addModule() on the returned reference before loadBytecode().
          */
-        Bokken::Scripting::Engine &scriptingEngine() { return Bokken::Scripting::Engine::Instance(); }
+        Scripting::Engine &scriptingEngine() { return Scripting::Engine::Instance(); }
 
         /**
          * Enter the SDL event loop. Blocks until the window is closed or

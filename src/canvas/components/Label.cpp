@@ -7,7 +7,7 @@ namespace Bokken
         namespace Components
         {
 
-            TTF_Font *Label::get_font(const std::string &path, float size, Bokken::AssetPack *assets, SDL_Renderer *renderer)
+            TTF_Font *Label::get_font(const std::string &path, float size, AssetPack *assets, SDL_Renderer *renderer)
             {
                 // Get DPI scale — defaults to 1.0 if renderer is null
                 float scaleX = 1.0f, scaleY = 1.0f;
@@ -61,7 +61,7 @@ namespace Bokken
                 s_font_cache.clear();
             }
 
-            void Label::computeNode(std::shared_ptr<Bokken::Canvas::Node> node, Bokken::AssetPack *assets)
+            void Label::computeNode(std::shared_ptr<Bokken::Canvas::Node> node, AssetPack *assets)
             {
                 const auto &s = node->style;
                 float fSize = s.fontSize > 0.f ? s.fontSize : 16.f;
@@ -100,7 +100,7 @@ namespace Bokken
                 return node;
             }
 
-            void Label::draw(SDL_Renderer *renderer, std::shared_ptr<Bokken::Canvas::Node> node, Bokken::AssetPack *assets)
+            void Label::draw(SDL_Renderer *renderer, std::shared_ptr<Bokken::Canvas::Node> node, AssetPack *assets)
             {
                 if (!renderer || !node || node->textContent.empty())
                     return;

@@ -34,18 +34,62 @@ namespace Bokken
             return m_vao != 0;
         }
 
+        bool FullscreenPass::compile(const char *name, const char *fragmentSrc)
+        {
+            Shader sh;
+            if (!sh.fromSource(kVS, fragmentSrc, name))
+            {
+                SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                             "[FullscreenPass] failed to compile shader '%s'", name);
+                return false;
+            }
+            m_shaders[name] = std::move(sh);
+            return true;
+        }
+
+        Shader &FullscreenPass::bind(const char *name)
+        {
+            auto it = m_shaders.find(name);
+            if (it == m_shaders.end())
+            {
+                SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                             "[FullscreenPass] shader '%s' not compiled", name);
+                return m_fallback;
+            }
+            m_active = &it->second;
+            m_active->bind();
+            return *m_active;
+        }
+
         Shader &FullscreenPass::beginPass(const char *fragmentSrc, const char *debugName)
         {
-            // Recompile only when the FS source changes (it shouldn't, but
-            // this keeps the hot reload path open if we want it later).
-            if (!m_built || m_currentSrc != fragmentSrc)
+            // Cache by the raw pointer address of the source string. Since
+            // callers always pass static const char* literals, the address
+            // is stable across frames. This avoids both string comparison
+            // and recompilation entirely after the first call.
+            const void *key = static_cast<const void *>(fragmentSrc);
+            auto it = m_ptrCache.find(key);
+
+            if (it == m_ptrCache.end())
             {
-                m_shader.fromSource(kVS, fragmentSrc, debugName);
-                m_currentSrc = fragmentSrc;
-                m_built = true;
+                Shader sh;
+                if (!sh.fromSource(kVS, fragmentSrc, debugName))
+                {
+                    SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                                 "[FullscreenPass] failed to compile shader '%s'",
+                                 debugName ? debugName : "?");
+                    return m_fallback;
+                }
+                auto [inserted, _] = m_ptrCache.emplace(key, std::move(sh));
+                m_active = &inserted->second;
             }
-            m_shader.bind();
-            return m_shader;
+            else
+            {
+                m_active = &it->second;
+            }
+
+            m_active->bind();
+            return *m_active;
         }
 
         void FullscreenPass::draw()

@@ -120,6 +120,10 @@ namespace Bokken
             // Draw layer
             float zOrder = 10.0f;
 
+            // Blend mode for all particles in this emitter. Additive is the
+            // classic choice for fire and explosions; Alpha for smoke and dust.
+            Bokken::Renderer::BlendMode blendMode = Bokken::Renderer::BlendMode::Alpha;
+
             // Pool cap
             int maximumParticles = 256;
 
@@ -133,6 +137,9 @@ namespace Bokken
 
             // Read-only diagnostics.
             int liveParticleCount() const { return static_cast<int>(m_particles.size()); }
+
+            // Idle when not emitting and all particles have expired.
+            bool isIdle() const override { return !emitting && m_particles.empty(); }
 
         private:
             std::vector<Particle> m_particles;

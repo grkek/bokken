@@ -37,6 +37,9 @@ namespace Bokken
                 m = glm::scale(m, glm::vec3(scale, 1.0f));
                 return m;
             }
+
+            // Pure data — always idle.
+            bool isIdle() const override { return true; }
         };
     }
 }

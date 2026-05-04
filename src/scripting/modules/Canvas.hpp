@@ -101,14 +101,30 @@ namespace Bokken
                 static JSValue create_element(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue render(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue use_state(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue use_effect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+
+                // Runs queued effects after render() commits the tree.
+                static void flush_effects(JSContext *ctx);
 
                 static std::shared_ptr<Bokken::Canvas::Node> synchronize_tree(JSContext *ctx, JSValue val);
                 static void parse_simple_style_sheet(JSContext *ctx, JSValue style, Bokken::Canvas::SimpleStyleSheet &out);
 
                 static inline std::shared_ptr<Bokken::Canvas::Node> s_current_tree = nullptr;
                 static std::map<void *, std::vector<JSValue>> s_states;
+
+                struct EffectSlot
+                {
+                    JSValue callback = JS_UNDEFINED;
+                    JSValue cleanup = JS_UNDEFINED;
+                    std::vector<JSValue> deps;
+                    bool hasRun = false;
+                };
+                static std::map<void *, std::vector<EffectSlot>> s_effects;
+                static std::vector<std::pair<void *, int>> s_pendingEffects;
+
                 static void *s_active_comp;
                 static int s_hook_idx;
+                static int s_effect_idx;
                 static JSValue s_root_element;
             };
 

@@ -9,7 +9,11 @@ namespace Bokken
             std::map<void *, std::vector<JSValue>> Canvas::s_states;
             void *Canvas::s_active_comp = nullptr;
             int Canvas::s_hook_idx = 0;
+            int Canvas::s_effect_idx = 0;
             JSValue Canvas::s_root_element = JS_UNDEFINED;
+
+            std::map<void *, std::vector<Canvas::EffectSlot>> Canvas::s_effects;
+            std::vector<std::pair<void *, int>> Canvas::s_pendingEffects;
 
             struct StateSetterData
             {
@@ -320,6 +324,169 @@ namespace Bokken
                 return res;
             }
 
+            JSValue Canvas::use_effect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            {
+                if (!s_active_comp)
+                    return JS_ThrowInternalError(ctx, "useEffect can only be called inside a component function.");
+
+                if (argc < 1 || !JS_IsFunction(ctx, argv[0]))
+                    return JS_ThrowTypeError(ctx, "useEffect requires a callback function as the first argument.");
+
+                auto &slots = s_effects[s_active_comp];
+                int idx = s_effect_idx++;
+
+                // First render — create the slot.
+                if (idx >= static_cast<int>(slots.size()))
+                {
+                    EffectSlot slot;
+                    slot.callback = JS_DupValue(ctx, argv[0]);
+                    slot.hasRun = false;
+
+                    // Store deps if provided.
+                    if (argc >= 2 && JS_IsArray(argv[1]))
+                    {
+                        uint32_t len = 0;
+                        JSValue jsLen = JS_GetPropertyStr(ctx, argv[1], "length");
+                        JS_ToUint32(ctx, &len, jsLen);
+                        JS_FreeValue(ctx, jsLen);
+
+                        for (uint32_t i = 0; i < len; i++)
+                        {
+                            JSValue d = JS_GetPropertyUint32(ctx, argv[1], i);
+                            slot.deps.push_back(JS_DupValue(ctx, d));
+                            JS_FreeValue(ctx, d);
+                        }
+                    }
+
+                    slots.push_back(std::move(slot));
+                    s_pendingEffects.push_back({s_active_comp, idx});
+                    return JS_UNDEFINED;
+                }
+
+                // Subsequent renders — check if deps changed.
+                EffectSlot &slot = slots[idx];
+
+                // Update the callback (it may be a new closure).
+                JS_FreeValue(ctx, slot.callback);
+                slot.callback = JS_DupValue(ctx, argv[0]);
+
+                // No deps argument → run every render.
+                if (argc < 2 || !JS_IsArray(argv[1]))
+                {
+                    s_pendingEffects.push_back({s_active_comp, idx});
+                    return JS_UNDEFINED;
+                }
+
+                // Empty deps array → run only once (already ran).
+                uint32_t newLen = 0;
+                JSValue jsLen = JS_GetPropertyStr(ctx, argv[1], "length");
+                JS_ToUint32(ctx, &newLen, jsLen);
+                JS_FreeValue(ctx, jsLen);
+
+                if (newLen == 0 && slot.hasRun)
+                    return JS_UNDEFINED;
+
+                // Compare deps — shallow equality check.
+                bool changed = false;
+                if (newLen != static_cast<uint32_t>(slot.deps.size()))
+                {
+                    changed = true;
+                }
+                else
+                {
+                    for (uint32_t i = 0; i < newLen; i++)
+                    {
+                        JSValue newDep = JS_GetPropertyUint32(ctx, argv[1], i);
+
+                        // Shallow equality: convert both to strings and compare.
+                        // This handles numbers, strings, booleans correctly.
+                        // For objects/arrays it compares by toString which is
+                        // intentionally coarse — deps should be primitives.
+                        const char *oldStr = JS_ToCString(ctx, slot.deps[i]);
+                        const char *newStr = JS_ToCString(ctx, newDep);
+                        bool eq = (oldStr && newStr && strcmp(oldStr, newStr) == 0);
+                        if (oldStr) JS_FreeCString(ctx, oldStr);
+                        if (newStr) JS_FreeCString(ctx, newStr);
+                        JS_FreeValue(ctx, newDep);
+
+                        if (!eq)
+                        {
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (changed)
+                {
+                    // Free old deps, store new ones.
+                    for (auto &d : slot.deps)
+                        JS_FreeValue(ctx, d);
+                    slot.deps.clear();
+
+                    for (uint32_t i = 0; i < newLen; i++)
+                    {
+                        JSValue d = JS_GetPropertyUint32(ctx, argv[1], i);
+                        slot.deps.push_back(JS_DupValue(ctx, d));
+                        JS_FreeValue(ctx, d);
+                    }
+
+                    s_pendingEffects.push_back({s_active_comp, idx});
+                }
+
+                return JS_UNDEFINED;
+            }
+
+            void Canvas::flush_effects(JSContext *ctx)
+            {
+                // Run all pending effects. This is called after render()
+                // completes — same timing as React's commit phase.
+                auto pending = std::move(s_pendingEffects);
+                s_pendingEffects.clear();
+
+                for (auto &[comp, idx] : pending)
+                {
+                    auto it = s_effects.find(comp);
+                    if (it == s_effects.end() || idx >= static_cast<int>(it->second.size()))
+                        continue;
+
+                    EffectSlot &slot = it->second[idx];
+
+                    // Run cleanup from the previous invocation.
+                    if (JS_IsFunction(ctx, slot.cleanup))
+                    {
+                        JSValue ret = JS_Call(ctx, slot.cleanup, JS_UNDEFINED, 0, nullptr);
+                        if (JS_IsException(ret))
+                        {
+                            auto &engine = Bokken::Scripting::Engine::Instance();
+                            engine.reportException("useEffect cleanup");
+                        }
+                        JS_FreeValue(ctx, ret);
+                        JS_FreeValue(ctx, slot.cleanup);
+                        slot.cleanup = JS_UNDEFINED;
+                    }
+
+                    // Run the effect callback.
+                    JSValue ret = JS_Call(ctx, slot.callback, JS_UNDEFINED, 0, nullptr);
+                    if (JS_IsException(ret))
+                    {
+                        auto &engine = Bokken::Scripting::Engine::Instance();
+                        engine.reportException("useEffect callback");
+                    }
+                    else if (JS_IsFunction(ctx, ret))
+                    {
+                        // The callback returned a cleanup function.
+                        slot.cleanup = ret;
+                    }
+                    else
+                    {
+                        JS_FreeValue(ctx, ret);
+                    }
+
+                    slot.hasRun = true;
+                }
+            }
+
             std::shared_ptr<Bokken::Canvas::Node> Canvas::synchronize_tree(JSContext *ctx, JSValue val)
             {
                 auto &engine = Bokken::Scripting::Engine::Instance();
@@ -335,9 +502,11 @@ namespace Bokken
                 {
                     void *prev_comp = s_active_comp;
                     int prev_idx = s_hook_idx;
+                    int prev_effect_idx = s_effect_idx;
 
                     s_active_comp = JS_VALUE_GET_PTR(type);
                     s_hook_idx = 0;
+                    s_effect_idx = 0;
 
                     JSValue properties = JS_GetPropertyStr(ctx, val, "properties");
                     JSValue result = JS_Call(ctx, type, JS_UNDEFINED, 1, &properties);
@@ -359,6 +528,7 @@ namespace Bokken
 
                     s_active_comp = prev_comp;
                     s_hook_idx = prev_idx;
+                    s_effect_idx = prev_effect_idx;
                     return node;
                 }
 
@@ -847,6 +1017,12 @@ namespace Bokken
                         s_current_tree->onLayout(s_current_tree);
                 }
 
+                // Run effects after the tree is committed — same timing
+                // as React's commit phase. Effects whose deps changed
+                // during this render cycle are queued by use_effect() and
+                // flushed here.
+                flush_effects(ctx);
+
                 return JS_UNDEFINED;
             }
 
@@ -854,6 +1030,7 @@ namespace Bokken
             {
                 JS_AddModuleExport(ctx, m, "default");
                 JS_AddModuleExport(ctx, m, "useState");
+                JS_AddModuleExport(ctx, m, "useEffect");
 
                 JS_AddModuleExport(ctx, m, "Align");
                 JS_AddModuleExport(ctx, m, "FlexDirection");
@@ -917,6 +1094,7 @@ namespace Bokken
                 JS_SetModuleExport(ctx, m, "Position", position);
                 JS_SetModuleExport(ctx, m, "Timing", timing);
                 JS_SetModuleExport(ctx, m, "useState", JS_NewCFunction(ctx, use_state, "useState", 1));
+                JS_SetModuleExport(ctx, m, "useEffect", JS_NewCFunction(ctx, use_effect, "useEffect", 2));
                 JS_SetModuleExport(ctx, m, "View", JS_NewString(ctx, "View"));
 
                 return 0;

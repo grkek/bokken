@@ -7,6 +7,8 @@
 #include "./scripting/Engine.hpp"
 #include "./scripting/modules/GameObject.hpp"
 #include "./scripting/modules/Input.hpp"
+#include "./game_object/Animation2D.hpp"
+#include "./game_object/Distortion2D.hpp"
 #include "./canvas/components/Label.hpp"
 #include "./renderer/stages/SpriteStage.hpp"
 

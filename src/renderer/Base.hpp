@@ -3,6 +3,7 @@
 #include "Pipeline.hpp"
 #include "SpriteBatcher.hpp"
 #include "GlyphCache.hpp"
+#include "TextureCache.hpp"
 #include "AssetPack.hpp"
 #include "stages/SpriteStage.hpp"
 #include "stages/CompositeStage.hpp"
@@ -56,6 +57,7 @@ namespace Bokken
 
             SpriteBatcher &batcher() { return m_batcher; }
             GlyphCache &glyphs() { return m_glyphs; }
+            TextureCache &textures() { return m_textures; }
             Pipeline &pipeline() { return m_pipeline; }
             SDL_Window *window() const { return m_window; }
 
@@ -73,6 +75,7 @@ namespace Bokken
 
             SpriteBatcher m_batcher;
             GlyphCache m_glyphs;
+            TextureCache m_textures;
             Pipeline m_pipeline;
 
             int m_logicalW = 0, m_logicalH = 0;

@@ -44,6 +44,12 @@ static int StubLogModule(JSContext *ctx, JSModuleDef *m)
     return 0;
 }
 
+static int StubRendererModule(JSContext *ctx, JSModuleDef *m)
+{
+    JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
+    return 0;
+}
+
 static int StubWindowModule(JSContext *ctx, JSModuleDef *m)
 {
     JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
@@ -86,6 +92,13 @@ static JSModuleDef *StubModuleLoader(JSContext *ctx, const char *module_name, vo
     if (strcmp(module_name, "bokken/log") == 0)
     {
         JSModuleDef *m = JS_NewCModule(ctx, "bokken/log", StubLogModule);
+        JS_AddModuleExport(ctx, m, "default");
+        return m;
+    }
+
+    if (strcmp(module_name, "bokken/renderer") == 0)
+    {
+        JSModuleDef *m = JS_NewCModule(ctx, "bokken/renderer", StubRendererModule);
         JS_AddModuleExport(ctx, m, "default");
         return m;
     }

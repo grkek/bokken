@@ -27,6 +27,13 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/third_party")
 
+# Once populated, don't try to update on every reconfigure. This prevents
+# the git stash/unstash conflicts that FetchContent triggers when the
+# cached source directory has any local state (timestamps, generated
+# files, etc.). Run `cmake -B build -DFETCHCONTENT_UPDATES_DISCONNECTED=OFF`
+# or nuke the relevant third_party/<dep>-* directories to force a fresh pull.
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
+
 # SDL3 — windowing, input, GL context, audio device.
 FetchContent_Declare(
   SDL3
@@ -48,6 +55,16 @@ FetchContent_Declare(
 # depend on system installations of those libs.
 set(SDLTTF_VENDORED ON CACHE BOOL "" FORCE)
 set(SDLTTF_SAMPLES  OFF CACHE BOOL "" FORCE)
+
+# SDL3_image — image loading (PNG, JPEG, etc.) for the TextureCache.
+FetchContent_Declare(
+  SDL3_image
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL_image.git
+  GIT_TAG        main
+  GIT_SHALLOW    TRUE
+)
+set(SDLIMAGE_VENDORED ON  CACHE BOOL "" FORCE)
+set(SDLIMAGE_SAMPLES  OFF CACHE BOOL "" FORCE)
 
 # QuickJS-NG — scripting runtime.
 FetchContent_Declare(
@@ -127,10 +144,27 @@ FetchContent_Declare(
 set(BUILD_SHARED_LIBS         OFF CACHE BOOL "" FORCE)
 set(SDLTTF_BUILD_SHARED_LIBS  OFF CACHE BOOL "" FORCE)
 set(SDL3TTF_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+# Suppress warnings from third-party code. They're not ours to fix and
+# they drown out warnings from our own source files. Flags are restored
+# immediately after FetchContent so our engine code still gets full
+# diagnostic coverage.
+set(BOKKEN_SAVED_C_FLAGS "${CMAKE_C_FLAGS}")
+set(BOKKEN_SAVED_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(BOKKEN_SAVED_OBJC_FLAGS "${CMAKE_OBJC_FLAGS}")
+string(APPEND CMAKE_C_FLAGS " -w")
+string(APPEND CMAKE_CXX_FLAGS " -w")
+string(APPEND CMAKE_OBJC_FLAGS " -w")
 
 # Populate everything. First run: clones into third_party/ and configures
 # each subproject. Subsequent runs: reuses the cached source.
-FetchContent_MakeAvailable(SDL3 SDL3_ttf quickjs_ng json physfs miniz glm dr_libs glad)
+FetchContent_MakeAvailable(SDL3 SDL3_ttf SDL3_image quickjs_ng json physfs miniz glm dr_libs glad)
+
+set(CMAKE_C_FLAGS "${BOKKEN_SAVED_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${BOKKEN_SAVED_CXX_FLAGS}")
+set(CMAKE_OBJC_FLAGS "${BOKKEN_SAVED_OBJC_FLAGS}")
 
 # Generate the actual glad library. The flags:
 #   STATIC       — link statically into the engine, same as our other deps.
@@ -175,6 +209,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SDL3::SDL3-static
     SDL3_ttf::SDL3_ttf-static
+    SDL3_image::SDL3_image-static
     miniz
     qjs
     nlohmann_json::nlohmann_json

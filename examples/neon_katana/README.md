@@ -2,8 +2,6 @@
 
 An example built with the Bokken engine. Demonstrates GameObjects, 2D components, input handling, Canvas UI, and the scene/state machine pattern.
 
-Some of the examples break because of state management.
-
 ## Prerequisites
 
 - **Bokken engine** built from the repo root (`make build` in the root)
@@ -35,3 +33,7 @@ make typescript
 # Run CMake configure only
 make setup
 ```
+
+## Acknowledgments
+
+- Bat sprite is by [bagzie](https://opengameart.org/users/bagzie)

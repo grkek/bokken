@@ -239,7 +239,7 @@ namespace Bokken
                     (static_cast<uint32_t>(std::clamp(c.b, 0.0f, 1.0f) * 255) << 8) |
                     static_cast<uint32_t>(std::clamp(c.a, 0.0f, 1.0f) * 255);
 
-                batcher->drawRect(sx, sy, sw, sh, rgba, layer);
+                batcher->drawRect(sx, sy, sw, sh, rgba, layer, blendMode);
             }
         }
     }

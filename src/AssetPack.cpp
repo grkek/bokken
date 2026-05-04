@@ -66,7 +66,7 @@ namespace Bokken
         }
 
         m_mounted.push_back(finalPath);
-        fprintf(stdout, "[AssetPack] Successfully mounted '%s' at '%s'\n",
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[AssetPack] Successfully mounted '%s' at '%s'\n",
                 finalPath.c_str(), mountPoint.c_str());
 
         return true;

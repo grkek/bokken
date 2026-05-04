@@ -7,6 +7,7 @@
 #include "../../renderer/stages/BloomStage.hpp"
 #include "../../renderer/stages/ColorGradeStage.hpp"
 #include "../../renderer/stages/CompositeStage.hpp"
+#include "../../renderer/stages/DistortionStage.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -47,10 +48,11 @@ namespace Bokken
             class Renderer : public Base
             {
             public:
-                Renderer(Bokken::Renderer::Base *renderer)
+                Renderer(Bokken::Renderer::Base *renderer, Bokken::AssetPack *assets = nullptr)
                     : Base("bokken/renderer")
                 {
                     s_renderer = renderer;
+                    s_assets = assets;
                 }
 
                 int declare(JSContext *ctx, JSModuleDef *m) override;
@@ -58,6 +60,7 @@ namespace Bokken
 
             private:
                 static inline Bokken::Renderer::Base *s_renderer = nullptr;
+                static inline Bokken::AssetPack *s_assets = nullptr;
 
                 // Pipeline functions.
                 static JSValue js_pipeline_add_stage(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -66,6 +69,15 @@ namespace Bokken
                 static JSValue js_pipeline_set_enabled(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue js_pipeline_configure(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue js_pipeline_list(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+
+                // Texture functions.
+                static JSValue js_load_texture(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_define_region(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_define_grid(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+
+                // Distortion functions.
+                static JSValue js_add_shockwave(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_clear_shockwaves(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
             };
 
         }

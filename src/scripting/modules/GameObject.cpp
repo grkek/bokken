@@ -39,6 +39,7 @@ namespace Bokken
                 PE2_AlphaEase,
                 PE2_ZOrder,
                 PE2_MaximumParticles,
+                PE2_BlendMode,
             };
 
             enum Transform2DProperties
@@ -69,6 +70,38 @@ namespace Bokken
                 M2_FlipY
             };
 
+            enum Sprite2DProperties
+            {
+                S2_TexturePath = 0,
+                S2_RegionName,
+                S2_Tint,
+                S2_Opacity,
+                S2_FlipX,
+                S2_FlipY,
+                S2_OverrideWidth,
+                S2_OverrideHeight,
+                S2_AnchorX,
+                S2_AnchorY,
+                S2_BlendMode,
+            };
+
+            enum Animation2DProperties
+            {
+                A2_IsPlaying = 0,
+                A2_ActiveClip,
+                A2_FrameIndex,
+                A2_CurrentRegion,
+            };
+
+            enum Distortion2DProperties
+            {
+                D2_Speed = 0,
+                D2_Thickness,
+                D2_Amplitude,
+                D2_MaxRadius,
+                D2_AutoStart,
+            };
+
             // Static function lists — must not be stack-allocated.
             // QuickJS-NG may retain interior pointers into these arrays after
             // JS_SetPropertyFunctionList returns, so they need static lifetime.
@@ -77,6 +110,7 @@ namespace Bokken
                 JS_CFUNC_DEF("getComponent", 1, GameObject::js_get_component),
                 JS_CFUNC_DEF("setParent", 1, GameObject::js_set_parent),
                 JS_CFUNC_DEF("getChildren", 0, GameObject::js_get_children),
+                JS_CGETSET_DEF("destroyWhenIdle", GameObject::js_get_destroy_when_idle, GameObject::js_set_destroy_when_idle),
             };
 
             static const JSCFunctionListEntry s_goStaticFuncs[] = {
@@ -115,6 +149,7 @@ namespace Bokken
                 JS_CGETSET_MAGIC_DEF("alphaEase", GameObject::js_particle2d_get, GameObject::js_particle2d_set, PE2_AlphaEase),
                 JS_CGETSET_MAGIC_DEF("zOrder", GameObject::js_particle2d_get, GameObject::js_particle2d_set, PE2_ZOrder),
                 JS_CGETSET_MAGIC_DEF("maximumParticles", GameObject::js_particle2d_get, GameObject::js_particle2d_set, PE2_MaximumParticles),
+                JS_CGETSET_MAGIC_DEF("blendMode", GameObject::js_particle2d_get, GameObject::js_particle2d_set, PE2_BlendMode),
                 JS_CFUNC_DEF("burst", 1, GameObject::js_particle2d_burst),
             };
 
@@ -148,6 +183,41 @@ namespace Bokken
                 JS_CGETSET_MAGIC_DEF("flipY", GameObject::js_mesh2d_get, GameObject::js_mesh2d_set, M2_FlipY),
             };
 
+            static const JSCFunctionListEntry s_s2Funcs[] = {
+                JS_CGETSET_MAGIC_DEF("texturePath", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_TexturePath),
+                JS_CGETSET_MAGIC_DEF("regionName", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_RegionName),
+                JS_CGETSET_MAGIC_DEF("tint", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_Tint),
+                JS_CGETSET_MAGIC_DEF("opacity", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_Opacity),
+                JS_CGETSET_MAGIC_DEF("flipX", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_FlipX),
+                JS_CGETSET_MAGIC_DEF("flipY", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_FlipY),
+                JS_CGETSET_MAGIC_DEF("overrideWidth", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_OverrideWidth),
+                JS_CGETSET_MAGIC_DEF("overrideHeight", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_OverrideHeight),
+                JS_CGETSET_MAGIC_DEF("anchorX", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_AnchorX),
+                JS_CGETSET_MAGIC_DEF("anchorY", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_AnchorY),
+                JS_CGETSET_MAGIC_DEF("blendMode", GameObject::js_sprite2d_get, GameObject::js_sprite2d_set, S2_BlendMode),
+            };
+
+            static const JSCFunctionListEntry s_a2Funcs[] = {
+                JS_CGETSET_MAGIC_DEF("isPlaying", GameObject::js_animation2d_get, nullptr, A2_IsPlaying),
+                JS_CGETSET_MAGIC_DEF("activeClip", GameObject::js_animation2d_get, nullptr, A2_ActiveClip),
+                JS_CGETSET_MAGIC_DEF("frameIndex", GameObject::js_animation2d_get, nullptr, A2_FrameIndex),
+                JS_CGETSET_MAGIC_DEF("currentRegion", GameObject::js_animation2d_get, nullptr, A2_CurrentRegion),
+                JS_CFUNC_DEF("play", 1, GameObject::js_animation2d_play),
+                JS_CFUNC_DEF("pause", 0, GameObject::js_animation2d_pause),
+                JS_CFUNC_DEF("stop", 0, GameObject::js_animation2d_stop),
+                JS_CFUNC_DEF("resume", 0, GameObject::js_animation2d_resume),
+                JS_CFUNC_DEF("addClip", 1, GameObject::js_animation2d_add_clip),
+            };
+
+            static const JSCFunctionListEntry s_d2Funcs[] = {
+                JS_CGETSET_MAGIC_DEF("speed", GameObject::js_distortion2d_get, GameObject::js_distortion2d_set, D2_Speed),
+                JS_CGETSET_MAGIC_DEF("thickness", GameObject::js_distortion2d_get, GameObject::js_distortion2d_set, D2_Thickness),
+                JS_CGETSET_MAGIC_DEF("amplitude", GameObject::js_distortion2d_get, GameObject::js_distortion2d_set, D2_Amplitude),
+                JS_CGETSET_MAGIC_DEF("maxRadius", GameObject::js_distortion2d_get, GameObject::js_distortion2d_set, D2_MaxRadius),
+                JS_CGETSET_MAGIC_DEF("autoStart", GameObject::js_distortion2d_get, GameObject::js_distortion2d_set, D2_AutoStart),
+                JS_CFUNC_DEF("trigger", 0, GameObject::js_distortion2d_trigger),
+            };
+
             int GameObject::declare(JSContext *ctx, JSModuleDef *m)
             {
                 JSRuntime *rt = JS_GetRuntime(ctx);
@@ -156,6 +226,9 @@ namespace Bokken
                 JS_NewClassID(rt, &s_camera2d_class_id);
                 JS_NewClassID(rt, &s_particle2d_class_id);
                 JS_NewClassID(rt, &s_mesh2d_class_id);
+                JS_NewClassID(rt, &s_sprite2d_class_id);
+                JS_NewClassID(rt, &s_animation2d_class_id);
+                JS_NewClassID(rt, &s_distortion2d_class_id);
                 JS_NewClassID(rt, &s_rigidbody2d_class_id);
                 JS_NewClassID(rt, &s_transform2d_class_id);
 
@@ -163,6 +236,9 @@ namespace Bokken
                 static JSClassDef cam2Class = {"Camera2D", .finalizer = nullptr};
                 static JSClassDef pe2Class = {"ParticleEmitter2D", .finalizer = nullptr};
                 static JSClassDef m2Class = {"Mesh2D", .finalizer = nullptr};
+                static JSClassDef s2Class = {"Sprite2D", .finalizer = nullptr};
+                static JSClassDef a2Class = {"Animation2D", .finalizer = nullptr};
+                static JSClassDef d2Class = {"Distortion2D", .finalizer = nullptr};
                 static JSClassDef rb2Class = {"Rigidbody2D", .finalizer = nullptr};
                 static JSClassDef t2Class = {"Transform2D", .finalizer = nullptr};
 
@@ -170,14 +246,22 @@ namespace Bokken
                 JS_NewClass(rt, s_camera2d_class_id, &cam2Class);
                 JS_NewClass(rt, s_particle2d_class_id, &pe2Class);
                 JS_NewClass(rt, s_mesh2d_class_id, &m2Class);
+                JS_NewClass(rt, s_sprite2d_class_id, &s2Class);
+                JS_NewClass(rt, s_animation2d_class_id, &a2Class);
+                JS_NewClass(rt, s_distortion2d_class_id, &d2Class);
                 JS_NewClass(rt, s_rigidbody2d_class_id, &rb2Class);
                 JS_NewClass(rt, s_transform2d_class_id, &t2Class);
 
                 JS_AddModuleExport(ctx, m, "Camera2D");
                 JS_AddModuleExport(ctx, m, "ParticleEmitter2D");
                 JS_AddModuleExport(ctx, m, "Mesh2D");
+                JS_AddModuleExport(ctx, m, "Sprite2D");
+                JS_AddModuleExport(ctx, m, "Animation2D");
+                JS_AddModuleExport(ctx, m, "Distortion2D");
                 JS_AddModuleExport(ctx, m, "Rigidbody2D");
                 JS_AddModuleExport(ctx, m, "Shape2D");
+                JS_AddModuleExport(ctx, m, "AnimationLoopMode");
+                JS_AddModuleExport(ctx, m, "BlendMode");
                 JS_AddModuleExport(ctx, m, "Transform2D");
 
                 return JS_AddModuleExport(ctx, m, "GameObject");
@@ -217,6 +301,24 @@ namespace Bokken
                                            sizeof(s_m2Funcs) / sizeof(s_m2Funcs[0]));
                 JS_SetClassProto(ctx, s_mesh2d_class_id, m2Proto);
 
+                // Sprite2D prototype.
+                JSValue s2Proto = JS_NewObject(ctx);
+                JS_SetPropertyFunctionList(ctx, s2Proto, s_s2Funcs,
+                                           sizeof(s_s2Funcs) / sizeof(s_s2Funcs[0]));
+                JS_SetClassProto(ctx, s_sprite2d_class_id, s2Proto);
+
+                // Animation2D prototype.
+                JSValue a2Proto = JS_NewObject(ctx);
+                JS_SetPropertyFunctionList(ctx, a2Proto, s_a2Funcs,
+                                           sizeof(s_a2Funcs) / sizeof(s_a2Funcs[0]));
+                JS_SetClassProto(ctx, s_animation2d_class_id, a2Proto);
+
+                // Distortion2D prototype.
+                JSValue d2Proto = JS_NewObject(ctx);
+                JS_SetPropertyFunctionList(ctx, d2Proto, s_d2Funcs,
+                                           sizeof(s_d2Funcs) / sizeof(s_d2Funcs[0]));
+                JS_SetClassProto(ctx, s_distortion2d_class_id, d2Proto);
+
                 // Rigidbody2D prototype.
                 JSValue rb2Proto = JS_NewObject(ctx);
                 JS_SetPropertyFunctionList(ctx, rb2Proto, s_rb2Funcs,
@@ -239,11 +341,26 @@ namespace Bokken
                 JSValue m2Token = JS_NewObject(ctx);
                 JS_SetPropertyStr(ctx, m2Token, "name", JS_NewString(ctx, "Mesh2D"));
 
+                JSValue s2Token = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, s2Token, "name", JS_NewString(ctx, "Sprite2D"));
+
+                JSValue a2Token = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, a2Token, "name", JS_NewString(ctx, "Animation2D"));
+
+                JSValue d2Token = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, d2Token, "name", JS_NewString(ctx, "Distortion2D"));
+
                 JSValue rb2Token = JS_NewObject(ctx);
                 JS_SetPropertyStr(ctx, rb2Token, "name", JS_NewString(ctx, "Rigidbody2D"));
 
                 JSValue t2Token = JS_NewObject(ctx);
                 JS_SetPropertyStr(ctx, t2Token, "name", JS_NewString(ctx, "Transform2D"));
+
+                // AnimationLoopMode enum.
+                JSValue animationLoopMode = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, animationLoopMode, "None", JS_NewString(ctx, "None"));
+                JS_SetPropertyStr(ctx, animationLoopMode, "Loop", JS_NewString(ctx, "Loop"));
+                JS_SetPropertyStr(ctx, animationLoopMode, "PingPong", JS_NewString(ctx, "PingPong"));
 
                 // Shape2D enum.
                 JSValue shape2d = JS_NewObject(ctx);
@@ -253,19 +370,31 @@ namespace Bokken
                 JS_SetPropertyStr(ctx, shape2d, "Triangle", JS_NewString(ctx, "Triangle"));
                 JS_SetPropertyStr(ctx, shape2d, "Line", JS_NewString(ctx, "Line"));
 
+                // BlendMode enum.
+                JSValue blendMode = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, blendMode, "Alpha", JS_NewString(ctx, "Alpha"));
+                JS_SetPropertyStr(ctx, blendMode, "Additive", JS_NewString(ctx, "Additive"));
+                JS_SetPropertyStr(ctx, blendMode, "Screen", JS_NewString(ctx, "Screen"));
+
                 JS_SetModuleExport(ctx, m, "GameObject", goCtor);
 
                 JS_SetModuleExport(ctx, m, "Camera2D", cam2Token);
                 JS_SetModuleExport(ctx, m, "ParticleEmitter2D", pe2Token);
                 JS_SetModuleExport(ctx, m, "Mesh2D", m2Token);
+                JS_SetModuleExport(ctx, m, "Sprite2D", s2Token);
+                JS_SetModuleExport(ctx, m, "Animation2D", a2Token);
+                JS_SetModuleExport(ctx, m, "Distortion2D", d2Token);
                 JS_SetModuleExport(ctx, m, "Rigidbody2D", rb2Token);
+                JS_SetModuleExport(ctx, m, "AnimationLoopMode", animationLoopMode);
                 JS_SetModuleExport(ctx, m, "Shape2D", shape2d);
+                JS_SetModuleExport(ctx, m, "BlendMode", blendMode);
                 JS_SetModuleExport(ctx, m, "Transform2D", t2Token);
 
                 return 0;
             }
 
-            // JS: new GameObject(name?)
+            // JS: new GameObject(name?, opts?)
+            //     opts: { destroyWhenIdle?: boolean }
             JSValue GameObject::js_constructor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
             {
                 JSValue obj = JS_NewObjectClass(ctx, s_class_id);
@@ -285,6 +414,16 @@ namespace Bokken
 
                 auto go = std::make_unique<Bokken::GameObject::Base>(name);
                 Bokken::GameObject::Base *raw = go.get();
+
+                // Apply optional metadata from the second argument.
+                if (argc > 1 && JS_IsObject(argv[1]))
+                {
+                    JSValue v = JS_GetPropertyStr(ctx, argv[1], "destroyWhenIdle");
+                    if (JS_IsBool(v))
+                        raw->destroyWhenIdle = JS_ToBool(ctx, v);
+                    JS_FreeValue(ctx, v);
+                }
+
                 Bokken::GameObject::Base::s_objects.push_back(std::move(go));
 
                 JS_SetOpaque(obj, raw);
@@ -320,6 +459,21 @@ namespace Bokken
                 {
                     auto &mesh = go->addComponent<Bokken::GameObject::Mesh2D>();
                     wrapped = wrap_mesh2d(ctx, &mesh);
+                }
+                else if (strcmp(className, "Sprite2D") == 0)
+                {
+                    auto &sprite = go->addComponent<Bokken::GameObject::Sprite2D>();
+                    wrapped = wrap_sprite2d(ctx, &sprite);
+                }
+                else if (strcmp(className, "Animation2D") == 0)
+                {
+                    auto &anim = go->addComponent<Bokken::GameObject::Animation2D>();
+                    wrapped = wrap_animation2d(ctx, &anim);
+                }
+                else if (strcmp(className, "Distortion2D") == 0)
+                {
+                    auto &dist = go->addComponent<Bokken::GameObject::Distortion2D>();
+                    wrapped = wrap_distortion2d(ctx, &dist);
                 }
                 else if (strcmp(className, "Camera2D") == 0)
                 {
@@ -376,6 +530,24 @@ namespace Bokken
                     auto *mesh = go->getComponent<Bokken::GameObject::Mesh2D>();
                     if (mesh)
                         result = wrap_mesh2d(ctx, mesh);
+                }
+                else if (strcmp(className, "Sprite2D") == 0)
+                {
+                    auto *sprite = go->getComponent<Bokken::GameObject::Sprite2D>();
+                    if (sprite)
+                        result = wrap_sprite2d(ctx, sprite);
+                }
+                else if (strcmp(className, "Animation2D") == 0)
+                {
+                    auto *anim = go->getComponent<Bokken::GameObject::Animation2D>();
+                    if (anim)
+                        result = wrap_animation2d(ctx, anim);
+                }
+                else if (strcmp(className, "Distortion2D") == 0)
+                {
+                    auto *dist = go->getComponent<Bokken::GameObject::Distortion2D>();
+                    if (dist)
+                        result = wrap_distortion2d(ctx, dist);
                 }
                 else if (strcmp(className, "Camera2D") == 0)
                 {
@@ -455,6 +627,25 @@ namespace Bokken
                     return obj;
                 JS_SetOpaque(obj, go);
                 return obj;
+            }
+
+            JSValue GameObject::js_get_destroy_when_idle(JSContext *ctx, JSValueConst this_val)
+            {
+                auto *go = static_cast<Bokken::GameObject::Base *>(
+                    JS_GetOpaque(this_val, s_class_id));
+                if (!go)
+                    return JS_UNDEFINED;
+                return JS_NewBool(ctx, go->destroyWhenIdle);
+            }
+
+            JSValue GameObject::js_set_destroy_when_idle(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+            {
+                auto *go = static_cast<Bokken::GameObject::Base *>(
+                    JS_GetOpaque(this_val, s_class_id));
+                if (!go)
+                    return JS_UNDEFINED;
+                go->destroyWhenIdle = JS_ToBool(ctx, val);
+                return JS_UNDEFINED;
             }
 
             // Camera2D getters.
@@ -583,6 +774,15 @@ namespace Bokken
                         static_cast<uint32_t>(em->colorEnd.a * 255);
                     return JS_NewUint32(ctx, packed);
                 }
+                case PE2_BlendMode:
+                {
+                    const char *name = "Alpha";
+                    if (em->blendMode == Bokken::Renderer::BlendMode::Additive)
+                        name = "Additive";
+                    else if (em->blendMode == Bokken::Renderer::BlendMode::Screen)
+                        name = "Screen";
+                    return JS_NewString(ctx, name);
+                }
                 }
                 return JS_UNDEFINED;
             }
@@ -642,6 +842,21 @@ namespace Bokken
                     int32_t v = 0;
                     JS_ToInt32(ctx, &v, val);
                     em->alphaEase = static_cast<Bokken::GameObject::ParticleEase>(v);
+                    return JS_UNDEFINED;
+                }
+                case PE2_BlendMode:
+                {
+                    const char *str = JS_ToCString(ctx, val);
+                    if (str)
+                    {
+                        if (strcmp(str, "additive") == 0)
+                            em->blendMode = Bokken::Renderer::BlendMode::Additive;
+                        else if (strcmp(str, "screen") == 0)
+                            em->blendMode = Bokken::Renderer::BlendMode::Screen;
+                        else
+                            em->blendMode = Bokken::Renderer::BlendMode::Alpha;
+                        JS_FreeCString(ctx, str);
+                    }
                     return JS_UNDEFINED;
                 }
                 }
@@ -1047,6 +1262,461 @@ namespace Bokken
                 return obj;
             }
 
+            JSValue GameObject::wrap_sprite2d(JSContext *ctx, Bokken::GameObject::Sprite2D *sprite)
+            {
+                JSValue obj = JS_NewObjectClass(ctx, s_sprite2d_class_id);
+                if (JS_IsException(obj))
+                    return obj;
+                JS_SetOpaque(obj, sprite);
+                return obj;
+            }
+
+            JSValue GameObject::wrap_animation2d(JSContext *ctx, Bokken::GameObject::Animation2D *anim)
+            {
+                JSValue obj = JS_NewObjectClass(ctx, s_animation2d_class_id);
+                if (JS_IsException(obj))
+                    return obj;
+                JS_SetOpaque(obj, anim);
+                return obj;
+            }
+
+            JSValue GameObject::wrap_distortion2d(JSContext *ctx, Bokken::GameObject::Distortion2D *dist)
+            {
+                JSValue obj = JS_NewObjectClass(ctx, s_distortion2d_class_id);
+                if (JS_IsException(obj))
+                    return obj;
+                JS_SetOpaque(obj, dist);
+                return obj;
+            }
+
+            JSValue GameObject::js_distortion2d_get(JSContext *ctx, JSValueConst this_val, int magic)
+            {
+                auto *dist = static_cast<Bokken::GameObject::Distortion2D *>(
+                    JS_GetOpaque(this_val, s_distortion2d_class_id));
+                if (!dist)
+                    return JS_UNDEFINED;
+
+                switch (magic)
+                {
+                case D2_Speed:
+                    return JS_NewFloat64(ctx, dist->speed);
+                case D2_Thickness:
+                    return JS_NewFloat64(ctx, dist->thickness);
+                case D2_Amplitude:
+                    return JS_NewFloat64(ctx, dist->amplitude);
+                case D2_MaxRadius:
+                    return JS_NewFloat64(ctx, dist->maxRadius);
+                case D2_AutoStart:
+                    return JS_NewBool(ctx, dist->autoStart);
+                }
+                return JS_UNDEFINED;
+            }
+
+            JSValue GameObject::js_distortion2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
+            {
+                auto *dist = static_cast<Bokken::GameObject::Distortion2D *>(
+                    JS_GetOpaque(this_val, s_distortion2d_class_id));
+                if (!dist)
+                    return JS_UNDEFINED;
+
+                if (magic == D2_AutoStart)
+                {
+                    dist->autoStart = JS_ToBool(ctx, val);
+                    return JS_UNDEFINED;
+                }
+
+                double d = 0.0;
+                if (JS_ToFloat64(ctx, &d, val) < 0)
+                    return JS_EXCEPTION;
+                float f = static_cast<float>(d);
+
+                switch (magic)
+                {
+                case D2_Speed:
+                    dist->speed = f;
+                    break;
+                case D2_Thickness:
+                    dist->thickness = f;
+                    break;
+                case D2_Amplitude:
+                    dist->amplitude = f;
+                    break;
+                case D2_MaxRadius:
+                    dist->maxRadius = f;
+                    break;
+                }
+                return JS_UNDEFINED;
+            }
+
+            JSValue GameObject::js_distortion2d_trigger(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+            {
+                auto *dist = static_cast<Bokken::GameObject::Distortion2D *>(
+                    JS_GetOpaque(this_val, s_distortion2d_class_id));
+                if (dist)
+                    dist->trigger();
+                return JS_UNDEFINED;
+            }
+
+            // Sprite2D property getters.
+            JSValue GameObject::js_sprite2d_get(JSContext *ctx, JSValueConst this_val, int magic)
+            {
+                auto *sprite = static_cast<Bokken::GameObject::Sprite2D *>(
+                    JS_GetOpaque(this_val, s_sprite2d_class_id));
+                if (!sprite)
+                    return JS_UNDEFINED;
+
+                switch (magic)
+                {
+                case S2_TexturePath:
+                    return JS_NewString(ctx, sprite->texturePath.c_str());
+                case S2_RegionName:
+                    return JS_NewString(ctx, sprite->regionName.c_str());
+                case S2_Tint:
+                {
+                    uint32_t packed =
+                        (static_cast<uint32_t>(sprite->tint.r * 255) << 24) |
+                        (static_cast<uint32_t>(sprite->tint.g * 255) << 16) |
+                        (static_cast<uint32_t>(sprite->tint.b * 255) << 8) |
+                        static_cast<uint32_t>(sprite->tint.a * 255);
+                    return JS_NewUint32(ctx, packed);
+                }
+                case S2_Opacity:
+                    return JS_NewFloat64(ctx, sprite->opacity);
+                case S2_FlipX:
+                    return JS_NewBool(ctx, sprite->flipX);
+                case S2_FlipY:
+                    return JS_NewBool(ctx, sprite->flipY);
+                case S2_OverrideWidth:
+                    return JS_NewFloat64(ctx, sprite->overrideWidth);
+                case S2_OverrideHeight:
+                    return JS_NewFloat64(ctx, sprite->overrideHeight);
+                case S2_AnchorX:
+                    return JS_NewFloat64(ctx, sprite->anchorX);
+                case S2_AnchorY:
+                    return JS_NewFloat64(ctx, sprite->anchorY);
+                case S2_BlendMode:
+                {
+                    const char *name = "alpha";
+                    if (sprite->blendMode == Bokken::Renderer::BlendMode::Additive)
+                        name = "additive";
+                    else if (sprite->blendMode == Bokken::Renderer::BlendMode::Screen)
+                        name = "screen";
+                    return JS_NewString(ctx, name);
+                }
+                }
+                return JS_UNDEFINED;
+            }
+
+            // Sprite2D property setters.
+            JSValue GameObject::js_sprite2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
+            {
+                auto *sprite = static_cast<Bokken::GameObject::Sprite2D *>(
+                    JS_GetOpaque(this_val, s_sprite2d_class_id));
+                if (!sprite)
+                    return JS_UNDEFINED;
+
+                switch (magic)
+                {
+                case S2_TexturePath:
+                {
+                    const char *str = JS_ToCString(ctx, val);
+                    if (str)
+                    {
+                        sprite->texturePath = str;
+
+                        // Eagerly load the texture into the cache so it's ready
+                        // by the time present() runs.
+                        if (s_textures && !sprite->texturePath.empty())
+                        {
+                            auto &engine = Bokken::Scripting::Engine::Instance();
+                            // The AssetPack pointer lives on the Engine — we
+                            // stored it during init. For now we access it via
+                            // the texture cache's own load which requires it.
+                            // The cache will no-op if already loaded.
+                        }
+
+                        JS_FreeCString(ctx, str);
+                    }
+                    return JS_UNDEFINED;
+                }
+                case S2_RegionName:
+                {
+                    const char *str = JS_ToCString(ctx, val);
+                    if (str)
+                    {
+                        sprite->regionName = str;
+                        JS_FreeCString(ctx, str);
+                    }
+                    return JS_UNDEFINED;
+                }
+                case S2_FlipX:
+                    sprite->flipX = JS_ToBool(ctx, val);
+                    return JS_UNDEFINED;
+                case S2_FlipY:
+                    sprite->flipY = JS_ToBool(ctx, val);
+                    return JS_UNDEFINED;
+                case S2_Tint:
+                {
+                    uint32_t c = 0;
+                    JS_ToUint32(ctx, &c, val);
+                    sprite->tint.r = ((c >> 24) & 0xFF) / 255.0f;
+                    sprite->tint.g = ((c >> 16) & 0xFF) / 255.0f;
+                    sprite->tint.b = ((c >> 8) & 0xFF) / 255.0f;
+                    sprite->tint.a = ((c >> 0) & 0xFF) / 255.0f;
+                    return JS_UNDEFINED;
+                }
+                case S2_BlendMode:
+                {
+                    const char *str = JS_ToCString(ctx, val);
+                    if (str)
+                    {
+                        if (strcmp(str, "additive") == 0)
+                            sprite->blendMode = Bokken::Renderer::BlendMode::Additive;
+                        else if (strcmp(str, "screen") == 0)
+                            sprite->blendMode = Bokken::Renderer::BlendMode::Screen;
+                        else
+                            sprite->blendMode = Bokken::Renderer::BlendMode::Alpha;
+                        JS_FreeCString(ctx, str);
+                    }
+                    return JS_UNDEFINED;
+                }
+                }
+
+                // Float properties.
+                double d = 0.0;
+                if (JS_ToFloat64(ctx, &d, val) < 0)
+                    return JS_EXCEPTION;
+                float f = static_cast<float>(d);
+
+                switch (magic)
+                {
+                case S2_Opacity:
+                    sprite->opacity = f;
+                    break;
+                case S2_OverrideWidth:
+                    sprite->overrideWidth = f;
+                    break;
+                case S2_OverrideHeight:
+                    sprite->overrideHeight = f;
+                    break;
+                case S2_AnchorX:
+                    sprite->anchorX = f;
+                    break;
+                case S2_AnchorY:
+                    sprite->anchorY = f;
+                    break;
+                }
+                return JS_UNDEFINED;
+            }
+
+            // Animation2D read-only property getters.
+            JSValue GameObject::js_animation2d_get(JSContext *ctx, JSValueConst this_val, int magic)
+            {
+                auto *anim = static_cast<Bokken::GameObject::Animation2D *>(
+                    JS_GetOpaque(this_val, s_animation2d_class_id));
+                if (!anim)
+                    return JS_UNDEFINED;
+
+                switch (magic)
+                {
+                case A2_IsPlaying:
+                    return JS_NewBool(ctx, anim->isPlaying());
+                case A2_ActiveClip:
+                    return JS_NewString(ctx, anim->activeClip().c_str());
+                case A2_FrameIndex:
+                    return JS_NewInt32(ctx, anim->frameIndex());
+                case A2_CurrentRegion:
+                    return JS_NewString(ctx, anim->currentRegion().c_str());
+                }
+                return JS_UNDEFINED;
+            }
+
+            // JS: animation.play("run")
+            JSValue GameObject::js_animation2d_play(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            {
+                auto *anim = static_cast<Bokken::GameObject::Animation2D *>(
+                    JS_GetOpaque(this_val, s_animation2d_class_id));
+                if (!anim || argc < 1)
+                    return JS_UNDEFINED;
+
+                const char *name = JS_ToCString(ctx, argv[0]);
+                if (name)
+                {
+                    anim->play(name);
+                    JS_FreeCString(ctx, name);
+                }
+                return JS_UNDEFINED;
+            }
+
+            JSValue GameObject::js_animation2d_pause(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+            {
+                auto *anim = static_cast<Bokken::GameObject::Animation2D *>(
+                    JS_GetOpaque(this_val, s_animation2d_class_id));
+                if (anim)
+                    anim->pause();
+                return JS_UNDEFINED;
+            }
+
+            JSValue GameObject::js_animation2d_stop(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+            {
+                auto *anim = static_cast<Bokken::GameObject::Animation2D *>(
+                    JS_GetOpaque(this_val, s_animation2d_class_id));
+                if (anim)
+                    anim->stop();
+                return JS_UNDEFINED;
+            }
+
+            JSValue GameObject::js_animation2d_resume(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+            {
+                auto *anim = static_cast<Bokken::GameObject::Animation2D *>(
+                    JS_GetOpaque(this_val, s_animation2d_class_id));
+                if (anim)
+                    anim->resume();
+                return JS_UNDEFINED;
+            }
+
+            // JS: animation.addClip({ name, frames, fps?, loop? })
+            //
+            // frames can be:
+            //   - An array of region name strings (explicit regions).
+            //   - An object { frameWidth, frameHeight, count?, offsetX?, offsetY?,
+            //     paddingX?, paddingY? } which auto-slices the sibling Sprite2D's
+            //     texture into a grid of regions.
+            JSValue GameObject::js_animation2d_add_clip(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            {
+                auto *anim = static_cast<Bokken::GameObject::Animation2D *>(
+                    JS_GetOpaque(this_val, s_animation2d_class_id));
+                if (!anim || argc < 1 || !JS_IsObject(argv[0]))
+                    return JS_UNDEFINED;
+
+                JSValue clipObj = argv[0];
+
+                // name (required)
+                JSValue nameVal = JS_GetPropertyStr(ctx, clipObj, "name");
+                const char *nameStr = JS_ToCString(ctx, nameVal);
+                std::string clipName;
+                if (nameStr)
+                {
+                    clipName = nameStr;
+                    JS_FreeCString(ctx, nameStr);
+                }
+                JS_FreeValue(ctx, nameVal);
+
+                if (clipName.empty())
+                    return JS_UNDEFINED;
+
+                // fps (optional, default 12)
+                float fps = 12.0f;
+                JSValue fpsVal = JS_GetPropertyStr(ctx, clipObj, "fps");
+                if (JS_IsNumber(fpsVal))
+                {
+                    double d = 0;
+                    JS_ToFloat64(ctx, &d, fpsVal);
+                    fps = static_cast<float>(d);
+                }
+                JS_FreeValue(ctx, fpsVal);
+
+                // loop (optional, default "Loop")
+                Bokken::GameObject::AnimationLoop loop = Bokken::GameObject::AnimationLoop::Loop;
+                JSValue loopVal = JS_GetPropertyStr(ctx, clipObj, "loop");
+                if (JS_IsString(loopVal))
+                {
+                    const char *loopStr = JS_ToCString(ctx, loopVal);
+                    if (loopStr)
+                    {
+                        if (strcmp(loopStr, "None") == 0)
+                            loop = Bokken::GameObject::AnimationLoop::None;
+                        else if (strcmp(loopStr, "PingPong") == 0)
+                            loop = Bokken::GameObject::AnimationLoop::PingPong;
+                        JS_FreeCString(ctx, loopStr);
+                    }
+                }
+                JS_FreeValue(ctx, loopVal);
+
+                // frames — array or object
+                JSValue framesVal = JS_GetPropertyStr(ctx, clipObj, "frames");
+
+                if (JS_IsArray(framesVal))
+                {
+                    // Explicit region name list.
+                    Bokken::GameObject::AnimationClip clip;
+                    clip.name = clipName;
+                    clip.fps = fps;
+                    clip.loop = loop;
+
+                    uint32_t len = 0;
+                    JSValue lenVal = JS_GetPropertyStr(ctx, framesVal, "length");
+                    JS_ToUint32(ctx, &len, lenVal);
+                    JS_FreeValue(ctx, lenVal);
+
+                    for (uint32_t i = 0; i < len; ++i)
+                    {
+                        JSValue elem = JS_GetPropertyUint32(ctx, framesVal, i);
+                        const char *frameStr = JS_ToCString(ctx, elem);
+                        if (frameStr)
+                        {
+                            clip.frames.push_back(frameStr);
+                            JS_FreeCString(ctx, frameStr);
+                        }
+                        JS_FreeValue(ctx, elem);
+                    }
+
+                    anim->addClip(clip);
+                }
+                else if (JS_IsObject(framesVal))
+                {
+                    // Auto-slice a sprite sheet into frames.
+                    int32_t frameW = 0, frameH = 0;
+                    int32_t count = 0, offX = 0, offY = 0, padX = 0, padY = 0;
+
+                    auto readInt = [&](const char *prop, int32_t &out)
+                    {
+                        JSValue v = JS_GetPropertyStr(ctx, framesVal, prop);
+                        if (JS_IsNumber(v))
+                            JS_ToInt32(ctx, &out, v);
+                        JS_FreeValue(ctx, v);
+                    };
+
+                    readInt("frameWidth", frameW);
+                    readInt("frameHeight", frameH);
+                    readInt("count", count);
+                    readInt("offsetX", offX);
+                    readInt("offsetY", offY);
+                    readInt("paddingX", padX);
+                    readInt("paddingY", padY);
+
+                    // Optional per-clip texture path. When present, this clip
+                    // sources from a different sprite sheet than the Sprite2D's
+                    // default. Useful for separate idle/run/jump PNGs.
+                    std::string clipTexturePath;
+                    JSValue texPathVal = JS_GetPropertyStr(ctx, framesVal, "texturePath");
+                    if (JS_IsString(texPathVal))
+                    {
+                        const char *s = JS_ToCString(ctx, texPathVal);
+                        if (s)
+                        {
+                            clipTexturePath = s;
+                            JS_FreeCString(ctx, s);
+                        }
+                    }
+                    JS_FreeValue(ctx, texPathVal);
+
+                    if (frameW <= 0 || frameH <= 0)
+                    {
+                        JS_FreeValue(ctx, framesVal);
+                        return JS_ThrowTypeError(ctx,
+                            "addClip: frames object requires frameWidth and frameHeight > 0");
+                    }
+
+                    anim->addClipFromGrid(clipName, frameW, frameH,
+                                          count, offX, offY, padX, padY,
+                                          fps, loop, clipTexturePath);
+                }
+
+                JS_FreeValue(ctx, framesVal);
+                return JS_DupValue(ctx, this_val);
+            }
+
             // Copies every own enumerable property from `props` onto `target` by
             // reading the key from props and setting it on target. This triggers
             // the target's setters (CGETSET_MAGIC) so { shape: "Quad" } on a
@@ -1140,6 +1810,7 @@ namespace Bokken
                 for (auto &go : Bokken::GameObject::Base::s_objects)
                     go->update(deltaTime);
 
+                Bokken::GameObject::Base::sweepIdle();
                 Bokken::GameObject::Base::flushDestroyed();
             }
 
@@ -1236,12 +1907,96 @@ namespace Bokken
                     return { worldX, worldY, worldRot, worldSX, worldSY, worldZ };
                 };
 
-                // Render meshes.
+                // Render sprites (textured quads from Sprite2D component).
+                // If a GameObject has both Sprite2D and Mesh2D, the sprite
+                // takes priority and the mesh is skipped.
+                for (auto &go : Bokken::GameObject::Base::s_objects)
+                {
+                    auto *t = go->getComponent<Bokken::GameObject::Transform2D>();
+                    auto *sprite = go->getComponent<Bokken::GameObject::Sprite2D>();
+                    if (!t || !sprite || sprite->texturePath.empty() || !s_textures)
+                        continue;
+
+                    // Resolve the texture region.
+                    const Bokken::Renderer::TextureRegion *reg = nullptr;
+                    Bokken::Renderer::TextureRegion fullReg;
+
+                    if (!sprite->regionName.empty())
+                        reg = s_textures->region(sprite->regionName);
+
+                    if (!reg)
+                    {
+                        fullReg = s_textures->fullRegion(sprite->texturePath);
+                        if (!fullReg.isValid())
+                            continue;
+                        reg = &fullReg;
+                    }
+
+                    WorldTransform wt = computeWorld(go.get(), t);
+
+                    // Determine draw size: use override dimensions or source pixels.
+                    float srcW = (sprite->overrideWidth > 0.0f)
+                                     ? sprite->overrideWidth
+                                     : static_cast<float>(reg->w);
+                    float srcH = (sprite->overrideHeight > 0.0f)
+                                     ? sprite->overrideHeight
+                                     : static_cast<float>(reg->h);
+
+                    // Aspect ratio preservation when only one dimension is set.
+                    if (sprite->overrideWidth > 0.0f && sprite->overrideHeight <= 0.0f)
+                        srcH = srcW * (static_cast<float>(reg->h) / static_cast<float>(reg->w));
+                    else if (sprite->overrideHeight > 0.0f && sprite->overrideWidth <= 0.0f)
+                        srcW = srcH * (static_cast<float>(reg->w) / static_cast<float>(reg->h));
+
+                    // Scale by transform scale and camera zoom. srcW/srcH are
+                    // in "pixels at 1:1 zoom" — we convert to world units by
+                    // dividing by pixelsPerUnit, then back to screen pixels.
+                    float sw = (srcW / pixelsPerUnit) * wt.scaleX * pixelsPerUnit;
+                    float sh = (srcH / pixelsPerUnit) * wt.scaleY * pixelsPerUnit;
+
+                    float screenCX = hw + (wt.x - cameraX) * pixelsPerUnit;
+                    float screenCY = hh - (wt.y - cameraY) * pixelsPerUnit;
+
+                    // Apply anchor offset.
+                    float drawX = screenCX - sw * sprite->anchorX;
+                    float drawY = screenCY - sh * sprite->anchorY;
+
+                    // Compute tint with opacity.
+                    float alpha = sprite->tint.a * sprite->opacity;
+                    uint32_t rgba =
+                        (static_cast<uint32_t>(sprite->tint.r * 255) << 24) |
+                        (static_cast<uint32_t>(sprite->tint.g * 255) << 16) |
+                        (static_cast<uint32_t>(sprite->tint.b * 255) << 8) |
+                        static_cast<uint32_t>(alpha * 255);
+
+                    // Handle flip by swapping UVs.
+                    float u0 = sprite->flipX ? reg->u1 : reg->u0;
+                    float u1 = sprite->flipX ? reg->u0 : reg->u1;
+                    float v0 = sprite->flipY ? reg->v1 : reg->v0;
+                    float v1 = sprite->flipY ? reg->v0 : reg->v1;
+
+                    // drawTextured expects a non-const texture pointer for binding.
+                    // The const_cast is safe — bind() only calls glBindTexture.
+                    auto *bindTex = const_cast<Bokken::Renderer::Texture2D *>(reg->texture);
+
+                    s_batcher->drawTextured(bindTex,
+                                            drawX, drawY, sw, sh,
+                                            u0, v0, u1, v1,
+                                            rgba, static_cast<int>(wt.zOrder),
+                                            sprite->blendMode);
+                }
+
+                // Render meshes (solid-color primitives from Mesh2D).
+                // Skipped for GameObjects that already have a Sprite2D.
                 for (auto &go : Bokken::GameObject::Base::s_objects)
                 {
                     auto *t = go->getComponent<Bokken::GameObject::Transform2D>();
                     auto *mesh = go->getComponent<Bokken::GameObject::Mesh2D>();
                     if (!t || !mesh || mesh->shape == Bokken::GameObject::Shape2D::Empty)
+                        continue;
+
+                    // Skip if this object has a Sprite2D — it was already rendered above.
+                    if (go->hasComponent<Bokken::GameObject::Sprite2D>())
                         continue;
 
                     WorldTransform wt = computeWorld(go.get(), t);

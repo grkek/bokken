@@ -99,6 +99,47 @@ namespace Bokken
 
             static void destroy(Base *obj) { obj->m_pendingDestroy = true; }
 
+            /**
+             * When true, the engine automatically marks this object for
+             * destruction once every component reports isIdle(). Checked
+             * once per frame before flushDestroyed(). Designed for
+             * fire-and-forget objects like explosions, laser segments,
+             * and one-shot particle effects.
+             */
+            bool destroyWhenIdle = false;
+
+            /**
+             * Check if all components report idle. Returns false if the
+             * object has no components (empty objects are not considered
+             * idle — they're likely being set up).
+             */
+            bool isIdle() const
+            {
+                if (m_components.empty())
+                    return false;
+
+                for (const auto &[key, comp] : m_components)
+                {
+                    if (!comp->isIdle())
+                        return false;
+                }
+                return true;
+            }
+
+            /**
+             * Walks all objects with destroyWhenIdle == true and marks
+             * them for destruction if all their components are idle.
+             * Called once per frame from the Loop, before flushDestroyed().
+             */
+            static void sweepIdle()
+            {
+                for (auto &o : s_objects)
+                {
+                    if (o->destroyWhenIdle && !o->m_pendingDestroy && o->isIdle())
+                        o->m_pendingDestroy = true;
+                }
+            }
+
             // O(1) lookup by name via hash map.
             static Base *find(const std::string &name)
             {

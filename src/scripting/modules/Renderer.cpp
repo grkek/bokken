@@ -78,6 +78,17 @@ namespace Bokken
                         readNumber(ctx, props, "clearB", ss->clearB);
                         readNumber(ctx, props, "clearA", ss->clearA);
                     }
+                    if (auto *ds = dynamic_cast<Bokken::Renderer::DistortionStage *>(st))
+                    {
+                        readNumber(ctx, props, "intensity", ds->intensity);
+                        readNumber(ctx, props, "heatHazeSpeed", ds->heatHazeSpeed);
+                        readNumber(ctx, props, "heatHazeFrequency", ds->heatHazeFrequency);
+                        readNumber(ctx, props, "heatHazeAmplitude", ds->heatHazeAmplitude);
+
+                        bool haze = ds->heatHaze;
+                        if (readBool(ctx, props, "heatHaze", haze))
+                            ds->heatHaze = haze;
+                    }
                 }
 
                 // Build a stage of a given kind. Returns nullptr if kind unknown.
@@ -89,6 +100,8 @@ namespace Bokken
                         return std::make_unique<Bokken::Renderer::BloomStage>(name);
                     if (kind == "color-grade")
                         return std::make_unique<Bokken::Renderer::ColorGradeStage>(name);
+                    if (kind == "distortion")
+                        return std::make_unique<Bokken::Renderer::DistortionStage>(name);
                     if (kind == "composite")
                         return std::make_unique<Bokken::Renderer::CompositeStage>(name);
                     return nullptr;
@@ -202,6 +215,190 @@ namespace Bokken
                 return arr;
             }
 
+            // JS: Renderer.loadTexture(path, filter?)
+            //     filter: "linear" (default) or "nearest"
+            //     Returns true on success.
+            JSValue Renderer::js_load_texture(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+            {
+                if (!s_renderer || !s_assets || argc < 1)
+                    return JS_FALSE;
+
+                const char *path = JS_ToCString(ctx, argv[0]);
+                if (!path)
+                    return JS_FALSE;
+
+                Bokken::Renderer::TextureFilter filter = Bokken::Renderer::TextureFilter::Linear;
+                if (argc >= 2)
+                {
+                    const char *filterStr = JS_ToCString(ctx, argv[1]);
+                    if (filterStr)
+                    {
+                        if (strcmp(filterStr, "nearest") == 0)
+                            filter = Bokken::Renderer::TextureFilter::Nearest;
+                        JS_FreeCString(ctx, filterStr);
+                    }
+                }
+
+                const Bokken::Renderer::Texture2D *tex =
+                    s_renderer->textures().load(path, s_assets, filter);
+                JS_FreeCString(ctx, path);
+                return tex ? JS_TRUE : JS_FALSE;
+            }
+
+            // JS: Renderer.defineRegion(name, texturePath, x, y, w, h)
+            JSValue Renderer::js_define_region(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+            {
+                if (!s_renderer || argc < 6)
+                    return JS_FALSE;
+
+                const char *name = JS_ToCString(ctx, argv[0]);
+                const char *texPath = JS_ToCString(ctx, argv[1]);
+                if (!name || !texPath)
+                {
+                    if (name) JS_FreeCString(ctx, name);
+                    if (texPath) JS_FreeCString(ctx, texPath);
+                    return JS_FALSE;
+                }
+
+                int32_t x, y, w, h;
+                JS_ToInt32(ctx, &x, argv[2]);
+                JS_ToInt32(ctx, &y, argv[3]);
+                JS_ToInt32(ctx, &w, argv[4]);
+                JS_ToInt32(ctx, &h, argv[5]);
+
+                s_renderer->textures().defineRegion(name, texPath, x, y, w, h);
+                JS_FreeCString(ctx, name);
+                JS_FreeCString(ctx, texPath);
+                return JS_TRUE;
+            }
+
+            // JS: Renderer.defineGrid(prefix, texturePath, frameW, frameH, props?)
+            //     props: { count?, offsetX?, offsetY?, paddingX?, paddingY? }
+            //     Returns the number of regions created.
+            JSValue Renderer::js_define_grid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+            {
+                if (!s_renderer || argc < 4)
+                    return JS_NewInt32(ctx, 0);
+
+                const char *prefix = JS_ToCString(ctx, argv[0]);
+                const char *texPath = JS_ToCString(ctx, argv[1]);
+                if (!prefix || !texPath)
+                {
+                    if (prefix) JS_FreeCString(ctx, prefix);
+                    if (texPath) JS_FreeCString(ctx, texPath);
+                    return JS_NewInt32(ctx, 0);
+                }
+
+                int32_t frameW, frameH;
+                JS_ToInt32(ctx, &frameW, argv[2]);
+                JS_ToInt32(ctx, &frameH, argv[3]);
+
+                int count = 0, offX = 0, offY = 0, padX = 0, padY = 0;
+
+                if (argc >= 5 && JS_IsObject(argv[4]))
+                {
+                    JSValue v;
+                    int32_t tmp;
+
+                    v = JS_GetPropertyStr(ctx, argv[4], "count");
+                    if (JS_IsNumber(v)) { JS_ToInt32(ctx, &tmp, v); count = tmp; }
+                    JS_FreeValue(ctx, v);
+
+                    v = JS_GetPropertyStr(ctx, argv[4], "offsetX");
+                    if (JS_IsNumber(v)) { JS_ToInt32(ctx, &tmp, v); offX = tmp; }
+                    JS_FreeValue(ctx, v);
+
+                    v = JS_GetPropertyStr(ctx, argv[4], "offsetY");
+                    if (JS_IsNumber(v)) { JS_ToInt32(ctx, &tmp, v); offY = tmp; }
+                    JS_FreeValue(ctx, v);
+
+                    v = JS_GetPropertyStr(ctx, argv[4], "paddingX");
+                    if (JS_IsNumber(v)) { JS_ToInt32(ctx, &tmp, v); padX = tmp; }
+                    JS_FreeValue(ctx, v);
+
+                    v = JS_GetPropertyStr(ctx, argv[4], "paddingY");
+                    if (JS_IsNumber(v)) { JS_ToInt32(ctx, &tmp, v); padY = tmp; }
+                    JS_FreeValue(ctx, v);
+                }
+
+                int created = s_renderer->textures().defineGrid(
+                    prefix, texPath, frameW, frameH, count, offX, offY, padX, padY);
+                JS_FreeCString(ctx, prefix);
+                JS_FreeCString(ctx, texPath);
+                return JS_NewInt32(ctx, created);
+            }
+
+            // JS: Renderer.addShockwave(x, y, props?)
+            //     x, y: normalised screen coordinates (0..1).
+            //     props: { speed?, thickness?, amplitude?, maxRadius? }
+            //
+            // Finds the first DistortionStage in the pipeline and adds a
+            // shockwave to it. If no distortion stage exists, does nothing.
+            JSValue Renderer::js_add_shockwave(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+            {
+                if (!s_renderer || argc < 2)
+                    return JS_FALSE;
+
+                double x = 0, y = 0;
+                JS_ToFloat64(ctx, &x, argv[0]);
+                JS_ToFloat64(ctx, &y, argv[1]);
+
+                float speed = 0.8f, thickness = 0.1f, amplitude = 0.06f, maxRadius = 1.5f;
+
+                if (argc >= 3 && JS_IsObject(argv[2]))
+                {
+                    auto readF = [&](const char *prop, float &out)
+                    {
+                        JSValue v = JS_GetPropertyStr(ctx, argv[2], prop);
+                        if (JS_IsNumber(v))
+                        {
+                            double d = 0;
+                            JS_ToFloat64(ctx, &d, v);
+                            out = static_cast<float>(d);
+                        }
+                        JS_FreeValue(ctx, v);
+                    };
+
+                    readF("speed", speed);
+                    readF("thickness", thickness);
+                    readF("amplitude", amplitude);
+                    readF("maxRadius", maxRadius);
+                }
+
+                // Find the distortion stage in the pipeline.
+                for (auto &stage : s_renderer->pipeline().stages())
+                {
+                    auto *ds = dynamic_cast<Bokken::Renderer::DistortionStage *>(stage.get());
+                    if (ds)
+                    {
+                        ds->addShockwave(static_cast<float>(x), static_cast<float>(y),
+                                         speed, thickness, amplitude, maxRadius);
+                        return JS_TRUE;
+                    }
+                }
+
+                return JS_FALSE;
+            }
+
+            // JS: Renderer.clearShockwaves()
+            JSValue Renderer::js_clear_shockwaves(JSContext *ctx, JSValueConst, int, JSValueConst *)
+            {
+                if (!s_renderer)
+                    return JS_UNDEFINED;
+
+                for (auto &stage : s_renderer->pipeline().stages())
+                {
+                    auto *ds = dynamic_cast<Bokken::Renderer::DistortionStage *>(stage.get());
+                    if (ds)
+                    {
+                        ds->clearShockwaves();
+                        break;
+                    }
+                }
+
+                return JS_UNDEFINED;
+            }
+
             int Renderer::declare(JSContext *ctx, JSModuleDef *m)
             {
                 return JS_AddModuleExport(ctx, m, "default");
@@ -226,6 +423,21 @@ namespace Bokken
                                   JS_NewCFunction(ctx, &Renderer::js_pipeline_list, "list", 0));
 
                 JS_SetPropertyStr(ctx, def, "pipeline", pipe);
+
+                // Texture management functions.
+                JS_SetPropertyStr(ctx, def, "loadTexture",
+                                  JS_NewCFunction(ctx, &Renderer::js_load_texture, "loadTexture", 2));
+                JS_SetPropertyStr(ctx, def, "defineRegion",
+                                  JS_NewCFunction(ctx, &Renderer::js_define_region, "defineRegion", 6));
+                JS_SetPropertyStr(ctx, def, "defineGrid",
+                                  JS_NewCFunction(ctx, &Renderer::js_define_grid, "defineGrid", 5));
+
+                // Distortion functions.
+                JS_SetPropertyStr(ctx, def, "addShockwave",
+                                  JS_NewCFunction(ctx, &Renderer::js_add_shockwave, "addShockwave", 3));
+                JS_SetPropertyStr(ctx, def, "clearShockwaves",
+                                  JS_NewCFunction(ctx, &Renderer::js_clear_shockwaves, "clearShockwaves", 0));
+
                 JS_SetModuleExport(ctx, m, "default", def);
                 return 0;
             }

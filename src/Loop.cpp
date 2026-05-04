@@ -97,7 +97,18 @@ namespace Bokken
         // Wire the renderer into the Canvas pieces that need it.
         Scripting::Modules::Canvas::setBatcher(&m_renderer->batcher());
         Scripting::Modules::GameObject::setBatcher(&m_renderer->batcher());
+        Scripting::Modules::GameObject::setTextureCache(&m_renderer->textures());
         Canvas::Components::Label::s_glyphCache = &m_renderer->glyphs();
+
+        // Wire the texture cache and asset pack into Animation2D so
+        // addClipFromGrid() can auto-load and slice sprite sheets.
+        Bokken::GameObject::Animation2D::s_textureCache = &m_renderer->textures();
+        Bokken::GameObject::Animation2D::s_assets = assets;
+
+        // Wire the pipeline into Distortion2D so trigger() can find
+        // the DistortionStage lazily at runtime.
+        Bokken::GameObject::Distortion2D::s_pipeline = &m_renderer->pipeline();
+        Bokken::GameObject::Distortion2D::s_window = m_window;
 
         // Scripting engine.
         if (!this->scriptingEngine().init(assets,
@@ -121,7 +132,7 @@ namespace Bokken
         m_initialised = true;
         m_quit = false;
 
-        fprintf(stdout, "[Bokken] Engine initialised — %s v%s (%s)\n",
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Engine initialised — %s v%s (%s)\n",
                 configuration.general.displayTitle.c_str(),
                 configuration.general.projectVersion.c_str(),
                 environment.c_str());
@@ -234,7 +245,7 @@ namespace Bokken
         SDL_Quit();
         m_initialised = false;
 
-        fprintf(stdout, "[Bokken] Engine shutdown complete.\n");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[Bokken] Engine shutdown complete.\n");
     }
 
     bool Loop::parseClearColor(const std::string &hex,

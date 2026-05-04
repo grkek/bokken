@@ -9,7 +9,11 @@
 #include "../../game_object/ParticleEmitter2D.hpp"
 #include "../../game_object/Rigidbody2D.hpp"
 #include "../../game_object/Shape2D.hpp"
+#include "../../game_object/Sprite2D.hpp"
+#include "../../game_object/Animation2D.hpp"
+#include "../../game_object/Distortion2D.hpp"
 #include "../../renderer/SpriteBatcher.hpp"
+#include "../../renderer/TextureCache.hpp"
 #include "../../game_object/Transform2D.hpp"
 
 #include <SDL3/SDL.h>
@@ -43,6 +47,7 @@ namespace Bokken
 
                 // Wired in by the Renderer module before the first frame.
                 static void setBatcher(Bokken::Renderer::SpriteBatcher *b) { s_batcher = b; }
+                static void setTextureCache(Bokken::Renderer::TextureCache *tc) { s_textures = tc; }
 
                 int declare(JSContext *ctx, JSModuleDef *m) override;
                 int init(JSContext *ctx, JSModuleDef *m) override;
@@ -58,11 +63,15 @@ namespace Bokken
                 static inline JSClassID s_camera2d_class_id = 0;
                 static inline JSClassID s_mesh2d_class_id = 0;
                 static inline JSClassID s_particle2d_class_id = 0;
+                static inline JSClassID s_sprite2d_class_id = 0;
+                static inline JSClassID s_animation2d_class_id = 0;
+                static inline JSClassID s_distortion2d_class_id = 0;
                 static inline JSClassID s_transform2d_class_id = 0;
                 static inline JSClassID s_rigidbody2d_class_id = 0;
 
                 static inline SDL_Window *s_window = nullptr;
                 static inline Bokken::Renderer::SpriteBatcher *s_batcher = nullptr;
+                static inline Bokken::Renderer::TextureCache *s_textures = nullptr;
 
                 static JSValue js_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
                 static JSValue js_add_component(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -71,6 +80,8 @@ namespace Bokken
                 static JSValue js_get_children(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue js_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue js_find(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_get_destroy_when_idle(JSContext *ctx, JSValueConst this_val);
+                static JSValue js_set_destroy_when_idle(JSContext *ctx, JSValueConst this_val, JSValueConst val);
 
                 static JSValue js_camera2d_get(JSContext *ctx, JSValueConst this_val, int magic);
                 static JSValue js_camera2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
@@ -94,6 +105,23 @@ namespace Bokken
 
                 static JSValue js_mesh2d_get(JSContext *ctx, JSValueConst this_val, int magic);
                 static JSValue js_mesh2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+
+                static JSValue js_sprite2d_get(JSContext *ctx, JSValueConst this_val, int magic);
+                static JSValue js_sprite2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+                static JSValue wrap_sprite2d(JSContext *ctx, Bokken::GameObject::Sprite2D *sprite);
+
+                static JSValue js_animation2d_play(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_animation2d_pause(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_animation2d_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_animation2d_resume(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_animation2d_add_clip(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_animation2d_get(JSContext *ctx, JSValueConst this_val, int magic);
+                static JSValue wrap_animation2d(JSContext *ctx, Bokken::GameObject::Animation2D *anim);
+
+                static JSValue js_distortion2d_get(JSContext *ctx, JSValueConst this_val, int magic);
+                static JSValue js_distortion2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+                static JSValue js_distortion2d_trigger(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue wrap_distortion2d(JSContext *ctx, Bokken::GameObject::Distortion2D *dist);
 
                 static JSValue wrap_transform2d(JSContext *ctx, Bokken::GameObject::Transform2D *t);
                 static JSValue wrap_rigidbody2d(JSContext *ctx, Bokken::GameObject::Rigidbody2D *rb);

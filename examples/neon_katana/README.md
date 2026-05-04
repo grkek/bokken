@@ -1,6 +1,8 @@
 # Neon Katana
 
-A platformer example built with the Bokken engine. Demonstrates GameObjects, 2D components, input handling, Canvas UI, and the scene/state machine pattern.
+An example built with the Bokken engine. Demonstrates GameObjects, 2D components, input handling, Canvas UI, and the scene/state machine pattern.
+
+Some of the examples break because of state management.
 
 ## Prerequisites
 

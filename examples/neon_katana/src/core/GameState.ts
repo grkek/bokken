@@ -1,6 +1,11 @@
 export enum GameState {
     MainMenu = "MainMenu",
     Playing = "Playing",
+    PhysicsGravity = "PhysicsGravity",
+    PhysicsCollision = "PhysicsCollision",
+    PhysicsSpring = "PhysicsSpring",
+    PhysicsFluid = "PhysicsFluid",
+    PhysicsOrbit = "PhysicsOrbit",
 }
 
 export interface Scene {

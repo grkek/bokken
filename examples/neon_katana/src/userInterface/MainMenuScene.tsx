@@ -8,15 +8,27 @@ function MenuButton(props: {
     label: string;
     onClick: () => void;
     accent?: boolean;
+    color?: number;
+    borderColor?: number;
 }): any {
+    const bgColor = props.accent
+        ? (props.color ?? 0x33FFAA22)
+        : 0xFFFFFF0A;
+    const brdColor = props.accent
+        ? (props.borderColor ?? 0x33FFAA88)
+        : 0xFFFFFF22;
+    const textColor = props.accent
+        ? (props.color ? (props.color | 0xFF) : 0x33FFAAFF)
+        : 0xCCCCDDFF;
+
     return (
         <View
             style={{
-                width: 220,
+                width: 280,
                 height: 48,
-                backgroundColor: props.accent ? 0x33CCFF22 : 0xFFFFFF0A,
+                backgroundColor: bgColor,
                 borderWidth: 1,
-                borderColor: props.accent ? 0x33CCFF88 : 0xFFFFFF22,
+                borderColor: brdColor,
                 borderRadius: 6,
                 justifyContent: Align.Center,
                 alignItems: Align.Center,
@@ -28,13 +40,17 @@ function MenuButton(props: {
             onClick={props.onClick}
         >
             <Label style={{
-                fontSize: 18,
-                color: props.accent ? 0x33CCFFFF : 0xCCCCDDFF,
+                fontSize: 16,
+                color: textColor,
             }}>
                 {props.label}
             </Label>
         </View>
     );
+}
+
+function Separator(): any {
+    return <View style={{ height: 10 }} />;
 }
 
 export class MainMenuScene implements Scene {
@@ -51,6 +67,12 @@ export class MainMenuScene implements Scene {
         if (Input.isKeyPressed("Enter")) {
             this.startGame();
         }
+        // Number keys for quick access
+        if (Input.isKeyPressed("Digit1")) this.goTo(GameState.PhysicsGravity);
+        if (Input.isKeyPressed("Digit2")) this.goTo(GameState.PhysicsCollision);
+        if (Input.isKeyPressed("Digit3")) this.goTo(GameState.PhysicsSpring);
+        if (Input.isKeyPressed("Digit4")) this.goTo(GameState.PhysicsFluid);
+        if (Input.isKeyPressed("Digit5")) this.goTo(GameState.PhysicsOrbit);
     }
 
     fixedUpdate(_dt: number): void {}
@@ -61,6 +83,12 @@ export class MainMenuScene implements Scene {
         this.game.transition(GameState.Playing);
     }
 
+    private goTo(state: GameState): void {
+        if (this.started) return;
+        this.started = true;
+        this.game.transition(state);
+    }
+
     private render(): void {
         const self = this;
 
@@ -69,47 +97,93 @@ export class MainMenuScene implements Scene {
                 <View style={{
                     width: "100%",
                     height: "100%",
-                    backgroundColor: 0x0D0D1AFF,
+                    backgroundColor: 0x050510FF,
                     justifyContent: Align.Center,
                     alignItems: Align.Center,
                 }}>
                     {/* Title */}
-                    <Label style={{ fontSize: 14, color: 0x33CCFF55 }}>
+                    <Label style={{ fontSize: 14, color: 0x33FFAA55 }}>
                         A Bokken Engine Demo
                     </Label>
                     <View style={{ height: 8 }} />
-                    <Label style={{ fontSize: 56, color: 0x33CCFFFF }}>
+                    <Label style={{ fontSize: 56, color: 0x33FFAAFF }}>
                         NEON KATANA
                     </Label>
+                    <View style={{ height: 4 }} />
+                    <Label style={{ fontSize: 16, color: 0xAABBCC88 }}>
+                        Fly. Collect. Explore the void.
+                    </Label>
 
-                    <View style={{ height: 64 }} />
+                    <View style={{ height: 36 }} />
 
-                    {/* Buttons */}
+                    {/* Main game button */}
                     <MenuButton
-                        label="Start Game"
+                        label={"\u25B6  Launch Game"}
                         accent={true}
                         onClick={() => self.startGame()}
                     />
+
+                    <View style={{ height: 28 }} />
+
+                    {/* Physics demos section */}
+                    <Label style={{ fontSize: 12, color: 0x8899AAAA }}>
+                        {"\u2500\u2500\u2500 PHYSICS SIMULATIONS \u2500\u2500\u2500"}
+                    </Label>
                     <View style={{ height: 12 }} />
+
                     <MenuButton
-                        label="Controls"
-                        onClick={() => Log.info("Movement: Arrow keys / WASD | Jump: Space")}
+                        label={"1 \u2B25 Gravity + Bounce"}
+                        accent={true}
+                        color={0xFF884422}
+                        borderColor={0xFF884488}
+                        onClick={() => self.goTo(GameState.PhysicsGravity)}
                     />
-                    <View style={{ height: 12 }} />
+                    <Separator />
                     <MenuButton
-                        label="Quit"
-                        onClick={() => Log.info("Thanks for playing!")}
+                        label={"2 \u2B25 Rigid Body Collisions"}
+                        accent={true}
+                        color={0xFF555522}
+                        borderColor={0xFF555588}
+                        onClick={() => self.goTo(GameState.PhysicsCollision)}
+                    />
+                    <Separator />
+                    <MenuButton
+                        label={"3 \u2B25 Springs & Pendulums"}
+                        accent={true}
+                        color={0xFFAA3322}
+                        borderColor={0xFFAA3388}
+                        onClick={() => self.goTo(GameState.PhysicsSpring)}
+                    />
+                    <Separator />
+                    <MenuButton
+                        label={"4 \u2B25 Fluid Simulation (SPH)"}
+                        accent={true}
+                        color={0x33CCFF22}
+                        borderColor={0x33CCFF88}
+                        onClick={() => self.goTo(GameState.PhysicsFluid)}
+                    />
+                    <Separator />
+                    <MenuButton
+                        label={"5 \u2B25 Orbital Mechanics"}
+                        accent={true}
+                        color={0xFFCC4422}
+                        borderColor={0xFFCC4488}
+                        onClick={() => self.goTo(GameState.PhysicsOrbit)}
                     />
 
-                    <View style={{ height: 80 }} />
+                    <View style={{ height: 36 }} />
 
-                    {/* Hints */}
+                    {/* Controls */}
                     <Label style={{ fontSize: 11, color: 0x444466FF }}>
-                        Arrow keys / WASD to move | Space to jump
+                        {"WASD / Arrows: fly | Space: boost | 1-5: quick select"}
+                    </Label>
+                    <View style={{ height: 8 }} />
+                    <Label style={{ fontSize: 11, color: 0x444466FF }}>
+                        {"In demos: Space: interact | R: reset | Esc: menu"}
                     </Label>
                     <View style={{ height: 16 }} />
                     <Label style={{ fontSize: 10, color: 0x333355FF }}>
-                        v1.0.0-alpha
+                        v3.0.0-physics
                     </Label>
                 </View>
             );

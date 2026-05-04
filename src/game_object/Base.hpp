@@ -21,7 +21,16 @@ namespace Bokken
             std::string name;
 
             explicit Base(std::string name = "New GameObject")
-                : name(std::move(name)) {}
+                : name(std::move(name))
+            {
+                // Register in the name index for O(1) find().
+                // If duplicate names exist, the latest one wins (same as the
+                // old linear scan which returned the first match — creation
+                // order means latest push_back is at the end, but find()
+                // scanned front-to-back. This preserves "first wins" by
+                // only inserting if the name isn't already present).
+                s_nameIndex.try_emplace(this->name, this);
+            }
 
             template <typename T>
             T &addComponent()
@@ -43,8 +52,7 @@ namespace Bokken
             template <typename T>
             bool hasComponent() const
             {
-                return m_components.find(std::type_index(typeid(T)))
-                       != m_components.end();
+                return m_components.find(std::type_index(typeid(T))) != m_components.end();
             }
 
             template <typename T>
@@ -91,34 +99,56 @@ namespace Bokken
 
             static void destroy(Base *obj) { obj->m_pendingDestroy = true; }
 
+            // O(1) lookup by name via hash map.
             static Base *find(const std::string &name)
             {
-                for (auto &obj : s_objects)
-                    if (obj->name == name)
-                        return obj.get();
+                auto it = s_nameIndex.find(name);
+                if (it != s_nameIndex.end() && !it->second->m_pendingDestroy)
+                    return it->second;
                 return nullptr;
             }
 
             static void flushDestroyed()
             {
+                // Remove from name index before erasing from s_objects.
+                for (auto &o : s_objects)
+                {
+                    if (!o->m_pendingDestroy)
+                        continue;
+
+                    // Only remove from index if this pointer is the indexed one
+                    // (handles duplicate names correctly).
+                    auto it = s_nameIndex.find(o->name);
+                    if (it != s_nameIndex.end() && it->second == o.get())
+                        s_nameIndex.erase(it);
+
+                    // Detach from parent.
+                    if (o->m_parent)
+                    {
+                        auto &siblings = o->m_parent->m_children;
+                        siblings.erase(
+                            std::remove(siblings.begin(), siblings.end(), o.get()),
+                            siblings.end());
+                    }
+
+                    for (auto &[k, c] : o->m_components)
+                        c->onDestroy();
+                }
+
                 s_objects.erase(
                     std::remove_if(s_objects.begin(), s_objects.end(),
                                    [](const std::unique_ptr<Base> &o)
-                                   {
-                                       if (!o->m_pendingDestroy)
-                                           return false;
-                                       for (auto &[k, c] : o->m_components)
-                                           c->onDestroy();
-                                       return true;
-                                   }),
+                                   { return o->m_pendingDestroy; }),
                     s_objects.end());
             }
 
             static inline std::vector<std::unique_ptr<Base>> s_objects;
+            static inline std::unordered_map<std::string, Base *> s_nameIndex;
 
         private:
             std::unordered_map<std::type_index,
-                               std::unique_ptr<Component>> m_components;
+                               std::unique_ptr<Component>>
+                m_components;
             std::vector<Base *> m_children;
             Base *m_parent = nullptr;
             bool m_pendingDestroy = false;

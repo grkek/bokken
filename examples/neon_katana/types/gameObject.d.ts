@@ -15,6 +15,47 @@ declare module "bokken/gameObject" {
     }
 
     /**
+     * Defines the viewport and projection for 2D rendering.
+     */
+    export class Camera2D extends Component {
+        public zoom: number;
+        public isActive: boolean;
+    }
+
+    /**
+     * Defines the particle system for 2D rendering.
+     */
+    export class ParticleEmitter2D extends Component {
+        public emitting: boolean;
+        public emitRate: number;
+        public lifetimeMinimum: number;
+        public lifetimeMaximum: number;
+        public speedMinimum: number;
+        public speedMaximum: number;
+        public sizeStart: number;
+        public sizeEnd: number;
+        public sizeStartVariance: number;
+        public sizeEase: number;
+        public spreadAngle: number;
+        public direction: number;
+        public gravity: number;
+        public damping: number;
+        public angularVelocityMinimum: number;
+        public angularVelocityMaximum: number;
+        public spawnOffsetX: number;
+        public spawnOffsetY: number;
+        public velocityScaleEmission: boolean;
+        public velocityReferenceSpeed: number;
+        public colorStart: number;
+        public colorEnd: number;
+        public alphaEase: number;
+        public zOrder: number;
+        public maximumParticles: number;
+
+        burst(count: number): void;
+    }
+
+    /**
      * 2D spatial transform: position, rotation (z-axis), scale, and draw order.
      * Does not carry visual state — attach a Mesh2D for that.
      */

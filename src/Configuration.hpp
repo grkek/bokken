@@ -76,20 +76,13 @@ namespace Bokken {
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(EnvironmentConfiguration, windowOverrides, scriptingEngine)
     };
 
-    struct BuildMetadata {
-        std::string engineVersion;
-        std::string lastBuilt;
-
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(BuildMetadata, engineVersion, lastBuilt)
-    };
-
     struct ProjectConfiguration {
         General general;
         WindowSettings windowBase;
         std::map<std::string, EnvironmentConfiguration> environments;
-        BuildMetadata buildMetadata;
+        std::map<std::string, std::string> metaData;
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(ProjectConfiguration, general, windowBase, environments, buildMetadata)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(ProjectConfiguration, general, windowBase, environments, metaData)
 
         // Helper to get active config
         const EnvironmentConfiguration& get_environment(bool is_production) const {

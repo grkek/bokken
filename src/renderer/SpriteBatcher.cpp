@@ -64,9 +64,12 @@ namespace Bokken
             // so the old `&& glDeleteXxx` guards triggered
             // -Wpointer-bool-conversion. Keep the handle check, drop the
             // pointer check.
-            if (m_vao) glDeleteVertexArrays(1, &m_vao);
-            if (m_vbo) glDeleteBuffers(1, &m_vbo);
-            if (m_ibo) glDeleteBuffers(1, &m_ibo);
+            if (m_vao)
+                glDeleteVertexArrays(1, &m_vao);
+            if (m_vbo)
+                glDeleteBuffers(1, &m_vbo);
+            if (m_ibo)
+                glDeleteBuffers(1, &m_ibo);
         }
 
         bool SpriteBatcher::init()
@@ -122,14 +125,25 @@ namespace Bokken
                                          float u0, float v0, float u1, float v1,
                                          uint32_t rgba, int layer)
         {
-            Quad q{x, y, w, h, u0, v0, u1, v1, rgba, tex, layer};
+            Quad q{x, y, w, h, u0, v0, u1, v1, rgba, tex, layer, 0.0f};
             m_quads.push_back(q);
         }
 
         void SpriteBatcher::drawRect(float x, float y, float w, float h,
                                      uint32_t rgba, int layer)
         {
-            Quad q{x, y, w, h, 0.f, 0.f, 1.f, 1.f, rgba, nullptr, layer};
+            Quad q{x, y, w, h, 0.f, 0.f, 1.f, 1.f, rgba, nullptr, layer, 0.0f};
+            m_quads.push_back(q);
+        }
+
+        void SpriteBatcher::drawRotatedRect(float cx, float cy, float w, float h,
+                                            float rotationRad, uint32_t rgba, int layer)
+        {
+            // Store as top-left for consistency, but issueBatch will
+            // rotate around center.
+            float x = cx - w * 0.5f;
+            float y = cy - h * 0.5f;
+            Quad q{x, y, w, h, 0.f, 0.f, 1.f, 1.f, rgba, nullptr, layer, rotationRad};
             m_quads.push_back(q);
         }
 
@@ -152,11 +166,39 @@ namespace Bokken
                 const float b = ((q.rgba >> 8) & 0xFF) / 255.0f;
                 const float a = ((q.rgba >> 0) & 0xFF) / 255.0f;
 
+                // Four corners (top-left origin, y down).
+                float x0 = q.x, y0 = q.y;
+                float x1 = q.x + q.w, y1 = q.y;
+                float x2 = q.x + q.w, y2 = q.y + q.h;
+                float x3 = q.x, y3 = q.y + q.h;
+
+                // Apply rotation around center if nonzero.
+                if (q.rotation != 0.0f)
+                {
+                    float cx = q.x + q.w * 0.5f;
+                    float cy = q.y + q.h * 0.5f;
+                    float cosR = std::cos(q.rotation);
+                    float sinR = std::sin(q.rotation);
+
+                    auto rotate = [cx, cy, cosR, sinR](float &px, float &py)
+                    {
+                        float dx = px - cx;
+                        float dy = py - cy;
+                        px = cx + dx * cosR - dy * sinR;
+                        py = cy + dx * sinR + dy * cosR;
+                    };
+
+                    rotate(x0, y0);
+                    rotate(x1, y1);
+                    rotate(x2, y2);
+                    rotate(x3, y3);
+                }
+
                 const uint32_t base = static_cast<uint32_t>(m_verts.size());
-                m_verts.push_back({q.x, q.y, q.u0, q.v0, r, g, b, a});
-                m_verts.push_back({q.x + q.w, q.y, q.u1, q.v0, r, g, b, a});
-                m_verts.push_back({q.x + q.w, q.y + q.h, q.u1, q.v1, r, g, b, a});
-                m_verts.push_back({q.x, q.y + q.h, q.u0, q.v1, r, g, b, a});
+                m_verts.push_back({x0, y0, q.u0, q.v0, r, g, b, a});
+                m_verts.push_back({x1, y1, q.u1, q.v0, r, g, b, a});
+                m_verts.push_back({x2, y2, q.u1, q.v1, r, g, b, a});
+                m_verts.push_back({x3, y3, q.u0, q.v1, r, g, b, a});
 
                 m_indices.push_back(base + 0);
                 m_indices.push_back(base + 1);

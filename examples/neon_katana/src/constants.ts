@@ -1,22 +1,28 @@
 export const Physics = {
-    gravity: -15,
-    jumpForce: 8,
-    moveSpeed: 6,
-    friction: 0.85,
+    thrustForce: 200,
+    reverseForce: 6,
+    maxSpeed: 30,
+    drag: 0.4,
+    rotationSpeed: 240,
 } as const;
 
 export const PlayerConfiguration = {
-    width: 0.8,
-    height: 0.8,
     spawnX: 0,
-    spawnY: 3,
-    fallResetY: -8,
-    color: 0x33CCFFFF,
+    spawnY: 0,
+    bodyWidth: 0.35,
+    bodyHeight: 0.9,
+    color: 0xCCDDEEEE,
+    noseColor: 0xCCDDEEEE,
+    finColor: 0x5588CCEE,
+    windowColor: 0x33CCFFEE,
 } as const;
 
 export const LevelConfiguration = {
-    groundColor: 0x44AA44FF,
-    platformColor: 0x888888FF,
-    coinColor: 0xFFDD00FF,
-    coinSize: 0.4,
+    parallaxFactors: [0.08, 0.25] as readonly number[],
+
+    // Crystals
+    crystalColor: 0xFFFFFFFF,
+    crystalGlowColor: 0x33FFAA00,
+    crystalSize: 0.35,
+    crystalCleanRadius: 55,
 } as const;

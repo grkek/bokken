@@ -14,7 +14,7 @@
   "windowBase": {
     "width": 800,
     "height": 600,
-    "clearColor": "#656E88"
+    "clearColor": "#1c253c"
   },
   "environments": {
     "development": {
@@ -68,7 +68,7 @@
       }
     }
   },
-  "buildMetadata": {
+  "metaData": {
     "engineVersion": "0.4.0",
     "lastBuilt": "2026-04-13T14:20:00Z"
   }

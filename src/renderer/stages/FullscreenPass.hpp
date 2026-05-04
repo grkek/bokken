@@ -1,7 +1,8 @@
 #pragma once
 
 #include "../Shader.hpp"
-#include "../gl/GL.hpp"
+
+#include "glad/gl.h"
 
 namespace Bokken
 {

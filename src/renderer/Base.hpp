@@ -7,10 +7,7 @@
 #include "stages/SpriteStage.hpp"
 #include "stages/CompositeStage.hpp"
 
-// GLEW first (via gl/GL.hpp); SDL after. GLEW requires being included
-// before any system GL headers, which SDL3 may pull in indirectly on
-// some platforms.
-#include "gl/GL.hpp"
+#include <glad/gl.h>
 #include <SDL3/SDL.h>
 
 #include <memory>

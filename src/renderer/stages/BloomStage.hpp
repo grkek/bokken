@@ -4,7 +4,7 @@
 #include "../RenderTarget.hpp"
 #include "FullscreenPass.hpp"
 
-#include "../gl/GL.hpp"
+#include "glad/gl.h"
 
 namespace Bokken
 {

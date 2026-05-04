@@ -6,7 +6,6 @@ namespace Bokken
     {
         void Behaviour::onAttach()
         {
-            transform = gameObject->getComponent<Transform>();
         }
     }
 }

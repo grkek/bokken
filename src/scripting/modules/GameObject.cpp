@@ -8,153 +8,169 @@ namespace Bokken
     {
         namespace Modules
         {
-            /* Property magic numbers used by the Transform getter / setter pair.
-             * Each enumerator names a property exposed on the JS Transform object.
-             */
-            enum TransformProperties
+            enum Transform2DProperties
             {
-                TP_PositionX = 0,
-                TP_PositionY,
-                TP_PositionZ,
-                TP_RotationX,
-                TP_RotationY,
-                TP_RotationZ,
-                TP_ScaleX,
-                TP_ScaleY,
-                TP_ScaleZ,
-                TP_Mesh
+                T2_PositionX = 0,
+                T2_PositionY,
+                T2_Rotation,
+                T2_ScaleX,
+                T2_ScaleY,
+                T2_ZOrder
             };
 
-            /* Property magic numbers for Rigidbody — paired getter / setter handle
-             * scalar fields and the velocity vector via dedicated entries.
-             */
-            enum RigidbodyProperties
+            enum Rigidbody2DProperties
             {
-                RB_Mass = 0,
-                RB_UseGravity,
-                RB_IsStatic,
-                RB_VelocityX,
-                RB_VelocityY,
-                RB_VelocityZ
+                RB2_Mass = 0,
+                RB2_UseGravity,
+                RB2_IsStatic,
+                RB2_VelocityX,
+                RB2_VelocityY,
+                RB2_AngularVelocity
             };
 
-            /* Module declaration — registers exports & native classes with QuickJS. */
+            enum Mesh2DProperties
+            {
+                M2_Shape = 0,
+                M2_Color, // packed 0xRRGGBBAA
+                M2_FlipX,
+                M2_FlipY
+            };
+
+            // Static function lists — must not be stack-allocated.
+            // QuickJS-NG may retain interior pointers into these arrays after
+            // JS_SetPropertyFunctionList returns, so they need static lifetime.
+            static const JSCFunctionListEntry s_goProtoFuncs[] = {
+                JS_CFUNC_DEF("addComponent", 2, GameObject::js_add_component),
+                JS_CFUNC_DEF("getComponent", 1, GameObject::js_get_component),
+                JS_CFUNC_DEF("setParent", 1, GameObject::js_set_parent),
+                JS_CFUNC_DEF("getChildren", 0, GameObject::js_get_children),
+            };
+
+            static const JSCFunctionListEntry s_goStaticFuncs[] = {
+                JS_CFUNC_DEF("destroy", 1, GameObject::js_destroy),
+                JS_CFUNC_DEF("find", 1, GameObject::js_find),
+            };
+
+            static const JSCFunctionListEntry s_t2Funcs[] = {
+                JS_CGETSET_MAGIC_DEF("positionX", GameObject::js_transform2d_get, GameObject::js_transform2d_set, T2_PositionX),
+                JS_CGETSET_MAGIC_DEF("positionY", GameObject::js_transform2d_get, GameObject::js_transform2d_set, T2_PositionY),
+                JS_CGETSET_MAGIC_DEF("rotation", GameObject::js_transform2d_get, GameObject::js_transform2d_set, T2_Rotation),
+                JS_CGETSET_MAGIC_DEF("scaleX", GameObject::js_transform2d_get, GameObject::js_transform2d_set, T2_ScaleX),
+                JS_CGETSET_MAGIC_DEF("scaleY", GameObject::js_transform2d_get, GameObject::js_transform2d_set, T2_ScaleY),
+                JS_CGETSET_MAGIC_DEF("zOrder", GameObject::js_transform2d_get, GameObject::js_transform2d_set, T2_ZOrder),
+                JS_CFUNC_DEF("translate", 2, GameObject::js_transform2d_translate),
+                JS_CFUNC_DEF("rotate", 1, GameObject::js_transform2d_rotate),
+            };
+
+            static const JSCFunctionListEntry s_rb2Funcs[] = {
+                JS_CGETSET_MAGIC_DEF("mass", GameObject::js_rigidbody2d_get, GameObject::js_rigidbody2d_set, RB2_Mass),
+                JS_CGETSET_MAGIC_DEF("useGravity", GameObject::js_rigidbody2d_get, GameObject::js_rigidbody2d_set, RB2_UseGravity),
+                JS_CGETSET_MAGIC_DEF("isStatic", GameObject::js_rigidbody2d_get, GameObject::js_rigidbody2d_set, RB2_IsStatic),
+                JS_CGETSET_MAGIC_DEF("velocityX", GameObject::js_rigidbody2d_get, GameObject::js_rigidbody2d_set, RB2_VelocityX),
+                JS_CGETSET_MAGIC_DEF("velocityY", GameObject::js_rigidbody2d_get, GameObject::js_rigidbody2d_set, RB2_VelocityY),
+                JS_CGETSET_MAGIC_DEF("angularVelocity", GameObject::js_rigidbody2d_get, GameObject::js_rigidbody2d_set, RB2_AngularVelocity),
+                JS_CFUNC_DEF("applyForce", 2, GameObject::js_rigidbody2d_apply_force),
+                JS_CFUNC_DEF("applyTorque", 1, GameObject::js_rigidbody2d_apply_torque),
+                JS_CFUNC_DEF("setVelocity", 2, GameObject::js_rigidbody2d_set_velocity),
+            };
+
+            static const JSCFunctionListEntry s_m2Funcs[] = {
+                JS_CGETSET_MAGIC_DEF("shape", GameObject::js_mesh2d_get, GameObject::js_mesh2d_set, M2_Shape),
+                JS_CGETSET_MAGIC_DEF("color", GameObject::js_mesh2d_get, GameObject::js_mesh2d_set, M2_Color),
+                JS_CGETSET_MAGIC_DEF("flipX", GameObject::js_mesh2d_get, GameObject::js_mesh2d_set, M2_FlipX),
+                JS_CGETSET_MAGIC_DEF("flipY", GameObject::js_mesh2d_get, GameObject::js_mesh2d_set, M2_FlipY),
+            };
+
             int GameObject::declare(JSContext *ctx, JSModuleDef *m)
             {
                 JSRuntime *rt = JS_GetRuntime(ctx);
 
                 JS_NewClassID(rt, &s_class_id);
-                JS_NewClassID(rt, &s_rigidbody_class_id);
-                JS_NewClassID(rt, &s_transform_class_id);
+                JS_NewClassID(rt, &s_transform2d_class_id);
+                JS_NewClassID(rt, &s_rigidbody2d_class_id);
+                JS_NewClassID(rt, &s_mesh2d_class_id);
 
-                /* Note: finalizers are intentionally null. The C++ engine owns the
-                 * lifetime of GameObject / Component instances via Base::s_objects;
-                 * the JS handle is a non-owning view. */
                 static JSClassDef goClass = {"GameObject", .finalizer = nullptr};
-                static JSClassDef rbClass = {"Rigidbody", .finalizer = nullptr};
-                static JSClassDef trClass = {"Transform", .finalizer = nullptr};
+                static JSClassDef t2Class = {"Transform2D", .finalizer = nullptr};
+                static JSClassDef rb2Class = {"Rigidbody2D", .finalizer = nullptr};
+                static JSClassDef m2Class = {"Mesh2D", .finalizer = nullptr};
 
                 JS_NewClass(rt, s_class_id, &goClass);
-                JS_NewClass(rt, s_rigidbody_class_id, &rbClass);
-                JS_NewClass(rt, s_transform_class_id, &trClass);
+                JS_NewClass(rt, s_transform2d_class_id, &t2Class);
+                JS_NewClass(rt, s_rigidbody2d_class_id, &rb2Class);
+                JS_NewClass(rt, s_mesh2d_class_id, &m2Class);
 
-                JS_AddModuleExport(ctx, m, "Mesh");
-                JS_AddModuleExport(ctx, m, "Rigidbody");
-                JS_AddModuleExport(ctx, m, "Transform");
+                JS_AddModuleExport(ctx, m, "Shape2D");
+                JS_AddModuleExport(ctx, m, "Transform2D");
+                JS_AddModuleExport(ctx, m, "Rigidbody2D");
+                JS_AddModuleExport(ctx, m, "Mesh2D");
 
                 return JS_AddModuleExport(ctx, m, "GameObject");
             }
 
-            /* Module initialisation — populates the declared exports with values. */
             int GameObject::init(JSContext *ctx, JSModuleDef *m)
             {
                 s_window = m_window;
 
-                /* GameObject prototype. */
+                // GameObject prototype and constructor.
                 JSValue goProto = JS_NewObject(ctx);
-                const JSCFunctionListEntry goProtoFuncs[] = {
-                    JS_CFUNC_DEF("addComponent", 1, GameObject::js_add_component),
-                    JS_CFUNC_DEF("getComponent", 1, GameObject::js_get_component),
-                    JS_CFUNC_DEF("setParent", 1, GameObject::js_set_parent),
-                    JS_CFUNC_DEF("getChildren", 0, GameObject::js_get_children),
-                };
-                JS_SetPropertyFunctionList(ctx, goProto, goProtoFuncs,
-                                           sizeof(goProtoFuncs) / sizeof(JSCFunctionListEntry));
+                JS_SetPropertyFunctionList(ctx, goProto, s_goProtoFuncs,
+                                           sizeof(s_goProtoFuncs) / sizeof(s_goProtoFuncs[0]));
 
                 JSValue goCtor = JS_NewCFunction2(ctx, GameObject::js_constructor,
                                                   "GameObject", 1, JS_CFUNC_constructor, 0);
-                const JSCFunctionListEntry goStaticFuncs[] = {
-                    JS_CFUNC_DEF("destroy", 1, GameObject::js_destroy),
-                    JS_CFUNC_DEF("find", 1, GameObject::js_find),
-                };
-                JS_SetPropertyFunctionList(ctx, goCtor, goStaticFuncs,
-                                           sizeof(goStaticFuncs) / sizeof(JSCFunctionListEntry));
+                JS_SetPropertyFunctionList(ctx, goCtor, s_goStaticFuncs,
+                                           sizeof(s_goStaticFuncs) / sizeof(s_goStaticFuncs[0]));
 
                 JS_SetConstructor(ctx, goCtor, goProto);
                 JS_SetClassProto(ctx, s_class_id, goProto);
 
-                /* Transform prototype — getters/setters via CGETSET_MAGIC,
-                 * methods via CFUNC_DEF. */
-                JSValue trProto = JS_NewObject(ctx);
-                const JSCFunctionListEntry trProtoFuncs[] = {
-                    JS_CGETSET_MAGIC_DEF("positionX", js_transform_get, js_transform_set, TP_PositionX),
-                    JS_CGETSET_MAGIC_DEF("positionY", js_transform_get, js_transform_set, TP_PositionY),
-                    JS_CGETSET_MAGIC_DEF("positionZ", js_transform_get, js_transform_set, TP_PositionZ),
-                    JS_CGETSET_MAGIC_DEF("rotationX", js_transform_get, js_transform_set, TP_RotationX),
-                    JS_CGETSET_MAGIC_DEF("rotationY", js_transform_get, js_transform_set, TP_RotationY),
-                    JS_CGETSET_MAGIC_DEF("rotationZ", js_transform_get, js_transform_set, TP_RotationZ),
-                    JS_CGETSET_MAGIC_DEF("scaleX", js_transform_get, js_transform_set, TP_ScaleX),
-                    JS_CGETSET_MAGIC_DEF("scaleY", js_transform_get, js_transform_set, TP_ScaleY),
-                    JS_CGETSET_MAGIC_DEF("scaleZ", js_transform_get, js_transform_set, TP_ScaleZ),
-                    JS_CGETSET_MAGIC_DEF("mesh", js_transform_get, js_transform_set, TP_Mesh),
-                    JS_CFUNC_DEF("translate", 3, GameObject::js_transform_translate),
-                    JS_CFUNC_DEF("rotate", 3, GameObject::js_transform_rotate),
-                };
-                JS_SetPropertyFunctionList(ctx, trProto, trProtoFuncs,
-                                           sizeof(trProtoFuncs) / sizeof(JSCFunctionListEntry));
-                JS_SetClassProto(ctx, s_transform_class_id, trProto);
+                // Transform2D prototype.
+                JSValue t2Proto = JS_NewObject(ctx);
+                JS_SetPropertyFunctionList(ctx, t2Proto, s_t2Funcs,
+                                           sizeof(s_t2Funcs) / sizeof(s_t2Funcs[0]));
+                JS_SetClassProto(ctx, s_transform2d_class_id, t2Proto);
 
-                /* Rigidbody prototype. */
-                JSValue rbProto = JS_NewObject(ctx);
-                const JSCFunctionListEntry rbProtoFuncs[] = {
-                    JS_CGETSET_MAGIC_DEF("mass", js_rigidbody_get, js_rigidbody_set, RB_Mass),
-                    JS_CGETSET_MAGIC_DEF("useGravity", js_rigidbody_get, js_rigidbody_set, RB_UseGravity),
-                    JS_CGETSET_MAGIC_DEF("isStatic", js_rigidbody_get, js_rigidbody_set, RB_IsStatic),
-                    JS_CGETSET_MAGIC_DEF("velocityX", js_rigidbody_get, js_rigidbody_set, RB_VelocityX),
-                    JS_CGETSET_MAGIC_DEF("velocityY", js_rigidbody_get, js_rigidbody_set, RB_VelocityY),
-                    JS_CGETSET_MAGIC_DEF("velocityZ", js_rigidbody_get, js_rigidbody_set, RB_VelocityZ),
-                    JS_CFUNC_DEF("applyForce", 3, GameObject::js_rigidbody_apply_force),
-                    JS_CFUNC_DEF("setVelocity", 3, GameObject::js_rigidbody_set_velocity),
-                };
-                JS_SetPropertyFunctionList(ctx, rbProto, rbProtoFuncs,
-                                           sizeof(rbProtoFuncs) / sizeof(JSCFunctionListEntry));
-                JS_SetClassProto(ctx, s_rigidbody_class_id, rbProto);
+                // Rigidbody2D prototype.
+                JSValue rb2Proto = JS_NewObject(ctx);
+                JS_SetPropertyFunctionList(ctx, rb2Proto, s_rb2Funcs,
+                                           sizeof(s_rb2Funcs) / sizeof(s_rb2Funcs[0]));
+                JS_SetClassProto(ctx, s_rigidbody2d_class_id, rb2Proto);
 
-                /* Sentinel exports — Rigidbody / Transform are passed by name to
-                 * addComponent / getComponent. JS code uses `Component.name` to
-                 * resolve them, so we hand back named function objects here. */
-                JSValue rbToken = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, rbToken, "name", JS_NewString(ctx, "Rigidbody"));
+                // Mesh2D prototype.
+                JSValue m2Proto = JS_NewObject(ctx);
+                JS_SetPropertyFunctionList(ctx, m2Proto, s_m2Funcs,
+                                           sizeof(s_m2Funcs) / sizeof(s_m2Funcs[0]));
+                JS_SetClassProto(ctx, s_mesh2d_class_id, m2Proto);
 
-                JSValue trToken = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, trToken, "name", JS_NewString(ctx, "Transform"));
+                // Component tokens.
+                JSValue t2Token = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, t2Token, "name", JS_NewString(ctx, "Transform2D"));
 
-                /* Mesh enum. */
-                JSValue mesh = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, mesh, "Empty", JS_NewString(ctx, "Empty"));
-                JS_SetPropertyStr(ctx, mesh, "Cube", JS_NewString(ctx, "Cube"));
-                JS_SetPropertyStr(ctx, mesh, "Sphere", JS_NewString(ctx, "Sphere"));
-                JS_SetPropertyStr(ctx, mesh, "Plane", JS_NewString(ctx, "Plane"));
+                JSValue rb2Token = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, rb2Token, "name", JS_NewString(ctx, "Rigidbody2D"));
+
+                JSValue m2Token = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, m2Token, "name", JS_NewString(ctx, "Mesh2D"));
+
+                // Shape2D enum.
+                JSValue shape2d = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, shape2d, "Empty", JS_NewString(ctx, "Empty"));
+                JS_SetPropertyStr(ctx, shape2d, "Quad", JS_NewString(ctx, "Quad"));
+                JS_SetPropertyStr(ctx, shape2d, "Circle", JS_NewString(ctx, "Circle"));
+                JS_SetPropertyStr(ctx, shape2d, "Triangle", JS_NewString(ctx, "Triangle"));
+                JS_SetPropertyStr(ctx, shape2d, "Line", JS_NewString(ctx, "Line"));
 
                 JS_SetModuleExport(ctx, m, "GameObject", goCtor);
-                JS_SetModuleExport(ctx, m, "Mesh", mesh);
-                JS_SetModuleExport(ctx, m, "Rigidbody", rbToken);
-                JS_SetModuleExport(ctx, m, "Transform", trToken);
+                JS_SetModuleExport(ctx, m, "Shape2D", shape2d);
+                JS_SetModuleExport(ctx, m, "Transform2D", t2Token);
+                JS_SetModuleExport(ctx, m, "Rigidbody2D", rb2Token);
+                JS_SetModuleExport(ctx, m, "Mesh2D", m2Token);
 
                 return 0;
             }
 
-            /* JS: new GameObject(name?) */
+            // JS: new GameObject(name?)
             JSValue GameObject::js_constructor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
             {
                 JSValue obj = JS_NewObjectClass(ctx, s_class_id);
@@ -172,7 +188,6 @@ namespace Bokken
                     }
                 }
 
-                /* Create the engine object and register it in the engine registry. */
                 auto go = std::make_unique<Bokken::GameObject::Base>(name);
                 Bokken::GameObject::Base *raw = go.get();
                 Bokken::GameObject::Base::s_objects.push_back(std::move(go));
@@ -181,7 +196,7 @@ namespace Bokken
                 return obj;
             }
 
-            /* JS: gameObject.addComponent(ComponentClass) */
+            // JS: gameObject.addComponent(Token, props?) — returns `this` for chaining.
             JSValue GameObject::js_add_component(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
                 auto *go = static_cast<Bokken::GameObject::Base *>(JS_GetOpaque(this_val, s_class_id));
@@ -191,20 +206,40 @@ namespace Bokken
                 JSValue nameVal = JS_GetPropertyStr(ctx, argv[0], "name");
                 const char *className = JS_ToCString(ctx, nameVal);
                 JS_FreeValue(ctx, nameVal);
+                if (!className)
+                    return JS_UNDEFINED;
 
-                JSValue result = JS_UNDEFINED;
-                if (className && strcmp(className, "Rigidbody") == 0)
+                JSValue wrapped = JS_UNDEFINED;
+
+                if (strcmp(className, "Transform2D") == 0)
                 {
-                    auto &rb = go->addComponent<Bokken::GameObject::Rigidbody>();
-                    result = wrap_rigidbody(ctx, &rb);
+                    auto &t = go->addComponent<Bokken::GameObject::Transform2D>();
+                    wrapped = wrap_transform2d(ctx, &t);
+                }
+                else if (strcmp(className, "Rigidbody2D") == 0)
+                {
+                    auto &rb = go->addComponent<Bokken::GameObject::Rigidbody2D>();
+                    wrapped = wrap_rigidbody2d(ctx, &rb);
+                }
+                else if (strcmp(className, "Mesh2D") == 0)
+                {
+                    auto &mesh = go->addComponent<Bokken::GameObject::Mesh2D>();
+                    wrapped = wrap_mesh2d(ctx, &mesh);
                 }
 
-                if (className)
-                    JS_FreeCString(ctx, className);
-                return result;
+                JS_FreeCString(ctx, className);
+
+                // Apply config object if provided.
+                if (!JS_IsUndefined(wrapped) && argc >= 2 && JS_IsObject(argv[1]))
+                    apply_props(ctx, wrapped, argv[1]);
+
+                JS_FreeValue(ctx, wrapped);
+
+                // Return `this` for chaining.
+                return JS_DupValue(ctx, this_val);
             }
 
-            /* JS: gameObject.getComponent(ComponentClass) */
+            // JS: gameObject.getComponent(Token)
             JSValue GameObject::js_get_component(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
                 auto *go = static_cast<Bokken::GameObject::Base *>(JS_GetOpaque(this_val, s_class_id));
@@ -214,25 +249,34 @@ namespace Bokken
                 JSValue nameVal = JS_GetPropertyStr(ctx, argv[0], "name");
                 const char *className = JS_ToCString(ctx, nameVal);
                 JS_FreeValue(ctx, nameVal);
+                if (!className)
+                    return JS_UNDEFINED;
 
                 JSValue result = JS_UNDEFINED;
-                if (className)
+
+                if (strcmp(className, "Transform2D") == 0)
                 {
-                    if (strcmp(className, "Rigidbody") == 0)
-                    {
-                        auto *rb = go->getComponent<Bokken::GameObject::Rigidbody>();
-                        result = rb ? wrap_rigidbody(ctx, rb) : JS_UNDEFINED;
-                    }
-                    else if (strcmp(className, "Transform") == 0)
-                    {
-                        result = wrap_transform(ctx, go->transform);
-                    }
-                    JS_FreeCString(ctx, className);
+                    auto *t = go->getComponent<Bokken::GameObject::Transform2D>();
+                    if (t)
+                        result = wrap_transform2d(ctx, t);
                 }
+                else if (strcmp(className, "Rigidbody2D") == 0)
+                {
+                    auto *rb = go->getComponent<Bokken::GameObject::Rigidbody2D>();
+                    if (rb)
+                        result = wrap_rigidbody2d(ctx, rb);
+                }
+                else if (strcmp(className, "Mesh2D") == 0)
+                {
+                    auto *mesh = go->getComponent<Bokken::GameObject::Mesh2D>();
+                    if (mesh)
+                        result = wrap_mesh2d(ctx, mesh);
+                }
+
+                JS_FreeCString(ctx, className);
                 return result;
             }
 
-            /* JS: gameObject.setParent(parent | null) */
             JSValue GameObject::js_set_parent(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
                 auto *go = static_cast<Bokken::GameObject::Base *>(JS_GetOpaque(this_val, s_class_id));
@@ -240,9 +284,7 @@ namespace Bokken
                     return JS_UNDEFINED;
 
                 if (JS_IsNull(argv[0]) || JS_IsUndefined(argv[0]))
-                {
                     go->setParent(nullptr);
-                }
                 else
                 {
                     auto *parent = static_cast<Bokken::GameObject::Base *>(JS_GetOpaque(argv[0], s_class_id));
@@ -251,8 +293,7 @@ namespace Bokken
                 return JS_UNDEFINED;
             }
 
-            /* JS: gameObject.getChildren() */
-            JSValue GameObject::js_get_children(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            JSValue GameObject::js_get_children(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
             {
                 auto *go = static_cast<Bokken::GameObject::Base *>(JS_GetOpaque(this_val, s_class_id));
                 if (!go)
@@ -269,7 +310,6 @@ namespace Bokken
                 return arr;
             }
 
-            /* JS: GameObject.destroy(obj) */
             JSValue GameObject::js_destroy(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
             {
                 if (argc < 1)
@@ -280,23 +320,19 @@ namespace Bokken
                 return JS_UNDEFINED;
             }
 
-            /* JS: GameObject.find(name) */
             JSValue GameObject::js_find(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
             {
                 if (argc < 1)
                     return JS_UNDEFINED;
-
                 const char *name = JS_ToCString(ctx, argv[0]);
                 if (!name)
                     return JS_UNDEFINED;
 
                 Bokken::GameObject::Base *go = Bokken::GameObject::Base::find(name);
                 JS_FreeCString(ctx, name);
-
                 if (!go)
                     return JS_UNDEFINED;
 
-                /* Re-wrap the existing engine object in a new JS handle. */
                 JSValue obj = JS_NewObjectClass(ctx, s_class_id);
                 if (JS_IsException(obj))
                     return obj;
@@ -304,56 +340,38 @@ namespace Bokken
                 return obj;
             }
 
-            /* Transform property getter — dispatched by magic. */
-            JSValue GameObject::js_transform_get(JSContext *ctx, JSValueConst this_val, int magic)
+            // Transform2D getters/setters.
+            JSValue GameObject::js_transform2d_get(JSContext *ctx, JSValueConst this_val, int magic)
             {
-                auto *t = static_cast<Bokken::GameObject::Transform *>(JS_GetOpaque(this_val, s_transform_class_id));
+                auto *t = static_cast<Bokken::GameObject::Transform2D *>(
+                    JS_GetOpaque(this_val, s_transform2d_class_id));
                 if (!t)
                     return JS_UNDEFINED;
 
                 switch (magic)
                 {
-                case TP_PositionX:
+                case T2_PositionX:
                     return JS_NewFloat64(ctx, t->position.x);
-                case TP_PositionY:
+                case T2_PositionY:
                     return JS_NewFloat64(ctx, t->position.y);
-                case TP_PositionZ:
-                    return JS_NewFloat64(ctx, t->position.z);
-                case TP_RotationX:
-                    return JS_NewFloat64(ctx, t->rotation.x);
-                case TP_RotationY:
-                    return JS_NewFloat64(ctx, t->rotation.y);
-                case TP_RotationZ:
-                    return JS_NewFloat64(ctx, t->rotation.z);
-                case TP_ScaleX:
+                case T2_Rotation:
+                    return JS_NewFloat64(ctx, t->rotation);
+                case T2_ScaleX:
                     return JS_NewFloat64(ctx, t->scale.x);
-                case TP_ScaleY:
+                case T2_ScaleY:
                     return JS_NewFloat64(ctx, t->scale.y);
-                case TP_ScaleZ:
-                    return JS_NewFloat64(ctx, t->scale.z);
-                case TP_Mesh:
-                    return JS_NewString(ctx, mesh_to_string(t->mesh));
+                case T2_ZOrder:
+                    return JS_NewFloat64(ctx, t->zOrder);
                 }
                 return JS_UNDEFINED;
             }
 
-            /* Transform property setter. */
-            JSValue GameObject::js_transform_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
+            JSValue GameObject::js_transform2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
             {
-                auto *t = static_cast<Bokken::GameObject::Transform *>(JS_GetOpaque(this_val, s_transform_class_id));
+                auto *t = static_cast<Bokken::GameObject::Transform2D *>(
+                    JS_GetOpaque(this_val, s_transform2d_class_id));
                 if (!t)
                     return JS_UNDEFINED;
-
-                if (magic == TP_Mesh)
-                {
-                    const char *str = JS_ToCString(ctx, val);
-                    if (str)
-                    {
-                        t->mesh = parse_mesh(str);
-                        JS_FreeCString(ctx, str);
-                    }
-                    return JS_UNDEFINED;
-                }
 
                 double d = 0.0;
                 if (JS_ToFloat64(ctx, &d, val) < 0)
@@ -362,109 +380,98 @@ namespace Bokken
 
                 switch (magic)
                 {
-                case TP_PositionX:
+                case T2_PositionX:
                     t->position.x = f;
                     break;
-                case TP_PositionY:
+                case T2_PositionY:
                     t->position.y = f;
                     break;
-                case TP_PositionZ:
-                    t->position.z = f;
+                case T2_Rotation:
+                    t->rotation = f;
                     break;
-                case TP_RotationX:
-                    t->rotation.x = f;
-                    break;
-                case TP_RotationY:
-                    t->rotation.y = f;
-                    break;
-                case TP_RotationZ:
-                    t->rotation.z = f;
-                    break;
-                case TP_ScaleX:
+                case T2_ScaleX:
                     t->scale.x = f;
                     break;
-                case TP_ScaleY:
+                case T2_ScaleY:
                     t->scale.y = f;
                     break;
-                case TP_ScaleZ:
-                    t->scale.z = f;
+                case T2_ZOrder:
+                    t->zOrder = f;
                     break;
                 }
                 return JS_UNDEFINED;
             }
 
-            /* JS: transform.translate(x, y, z) */
-            JSValue GameObject::js_transform_translate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            JSValue GameObject::js_transform2d_translate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
-                auto *t = static_cast<Bokken::GameObject::Transform *>(JS_GetOpaque(this_val, s_transform_class_id));
-                if (!t || argc < 3)
+                auto *t = static_cast<Bokken::GameObject::Transform2D *>(
+                    JS_GetOpaque(this_val, s_transform2d_class_id));
+                if (!t || argc < 2)
                     return JS_UNDEFINED;
 
-                double x, y, z;
+                double x, y;
                 if (JS_ToFloat64(ctx, &x, argv[0]) < 0 ||
-                    JS_ToFloat64(ctx, &y, argv[1]) < 0 ||
-                    JS_ToFloat64(ctx, &z, argv[2]) < 0)
+                    JS_ToFloat64(ctx, &y, argv[1]) < 0)
                     return JS_EXCEPTION;
 
-                t->translate(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+                t->translate(static_cast<float>(x), static_cast<float>(y));
                 return JS_UNDEFINED;
             }
 
-            /* JS: transform.rotate(x, y, z) — Euler degrees. */
-            JSValue GameObject::js_transform_rotate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            JSValue GameObject::js_transform2d_rotate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
-                auto *t = static_cast<Bokken::GameObject::Transform *>(JS_GetOpaque(this_val, s_transform_class_id));
-                if (!t || argc < 3)
+                auto *t = static_cast<Bokken::GameObject::Transform2D *>(
+                    JS_GetOpaque(this_val, s_transform2d_class_id));
+                if (!t || argc < 1)
                     return JS_UNDEFINED;
 
-                double x, y, z;
-                if (JS_ToFloat64(ctx, &x, argv[0]) < 0 ||
-                    JS_ToFloat64(ctx, &y, argv[1]) < 0 ||
-                    JS_ToFloat64(ctx, &z, argv[2]) < 0)
+                double deg;
+                if (JS_ToFloat64(ctx, &deg, argv[0]) < 0)
                     return JS_EXCEPTION;
 
-                t->rotate(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+                t->rotate(static_cast<float>(deg));
                 return JS_UNDEFINED;
             }
 
-            /* Rigidbody property getter. */
-            JSValue GameObject::js_rigidbody_get(JSContext *ctx, JSValueConst this_val, int magic)
+            // Rigidbody2D getters/setters.
+            JSValue GameObject::js_rigidbody2d_get(JSContext *ctx, JSValueConst this_val, int magic)
             {
-                auto *rb = static_cast<Bokken::GameObject::Rigidbody *>(JS_GetOpaque(this_val, s_rigidbody_class_id));
+                auto *rb = static_cast<Bokken::GameObject::Rigidbody2D *>(
+                    JS_GetOpaque(this_val, s_rigidbody2d_class_id));
                 if (!rb)
                     return JS_UNDEFINED;
 
                 switch (magic)
                 {
-                case RB_Mass:
+                case RB2_Mass:
                     return JS_NewFloat64(ctx, rb->mass);
-                case RB_UseGravity:
+                case RB2_UseGravity:
                     return JS_NewBool(ctx, rb->useGravity);
-                case RB_IsStatic:
+                case RB2_IsStatic:
                     return JS_NewBool(ctx, rb->isStatic);
-                case RB_VelocityX:
+                case RB2_VelocityX:
                     return JS_NewFloat64(ctx, rb->velocity.x);
-                case RB_VelocityY:
+                case RB2_VelocityY:
                     return JS_NewFloat64(ctx, rb->velocity.y);
-                case RB_VelocityZ:
-                    return JS_NewFloat64(ctx, rb->velocity.z);
+                case RB2_AngularVelocity:
+                    return JS_NewFloat64(ctx, rb->angularVelocity);
                 }
                 return JS_UNDEFINED;
             }
 
-            /* Rigidbody property setter. */
-            JSValue GameObject::js_rigidbody_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
+            JSValue GameObject::js_rigidbody2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
             {
-                auto *rb = static_cast<Bokken::GameObject::Rigidbody *>(JS_GetOpaque(this_val, s_rigidbody_class_id));
+                auto *rb = static_cast<Bokken::GameObject::Rigidbody2D *>(
+                    JS_GetOpaque(this_val, s_rigidbody2d_class_id));
                 if (!rb)
                     return JS_UNDEFINED;
 
                 switch (magic)
                 {
-                case RB_UseGravity:
+                case RB2_UseGravity:
                     rb->useGravity = JS_ToBool(ctx, val);
                     return JS_UNDEFINED;
-                case RB_IsStatic:
+                case RB2_IsStatic:
                     rb->isStatic = JS_ToBool(ctx, val);
                     return JS_UNDEFINED;
                 }
@@ -476,88 +483,212 @@ namespace Bokken
 
                 switch (magic)
                 {
-                case RB_Mass:
+                case RB2_Mass:
                     rb->mass = f;
                     break;
-                case RB_VelocityX:
+                case RB2_VelocityX:
                     rb->velocity.x = f;
                     break;
-                case RB_VelocityY:
+                case RB2_VelocityY:
                     rb->velocity.y = f;
                     break;
-                case RB_VelocityZ:
-                    rb->velocity.z = f;
+                case RB2_AngularVelocity:
+                    rb->angularVelocity = f;
                     break;
                 }
                 return JS_UNDEFINED;
             }
 
-            /* JS: rigidbody.applyForce(x, y, z) */
-            JSValue GameObject::js_rigidbody_apply_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            JSValue GameObject::js_rigidbody2d_apply_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
-                auto *rb = static_cast<Bokken::GameObject::Rigidbody *>(JS_GetOpaque(this_val, s_rigidbody_class_id));
-                if (!rb || argc < 3)
+                auto *rb = static_cast<Bokken::GameObject::Rigidbody2D *>(
+                    JS_GetOpaque(this_val, s_rigidbody2d_class_id));
+                if (!rb || argc < 2)
                     return JS_UNDEFINED;
 
-                double x, y, z;
+                double x, y;
                 if (JS_ToFloat64(ctx, &x, argv[0]) < 0 ||
-                    JS_ToFloat64(ctx, &y, argv[1]) < 0 ||
-                    JS_ToFloat64(ctx, &z, argv[2]) < 0)
+                    JS_ToFloat64(ctx, &y, argv[1]) < 0)
                     return JS_EXCEPTION;
 
-                rb->applyForce(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+                rb->applyForce(static_cast<float>(x), static_cast<float>(y));
                 return JS_UNDEFINED;
             }
 
-            /* JS: rigidbody.setVelocity(x, y, z) */
-            JSValue GameObject::js_rigidbody_set_velocity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+            JSValue GameObject::js_rigidbody2d_apply_torque(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
-                auto *rb = static_cast<Bokken::GameObject::Rigidbody *>(JS_GetOpaque(this_val, s_rigidbody_class_id));
-                if (!rb || argc < 3)
+                auto *rb = static_cast<Bokken::GameObject::Rigidbody2D *>(
+                    JS_GetOpaque(this_val, s_rigidbody2d_class_id));
+                if (!rb || argc < 1)
                     return JS_UNDEFINED;
 
-                double x, y, z;
-                if (JS_ToFloat64(ctx, &x, argv[0]) < 0 ||
-                    JS_ToFloat64(ctx, &y, argv[1]) < 0 ||
-                    JS_ToFloat64(ctx, &z, argv[2]) < 0)
+                double deg;
+                if (JS_ToFloat64(ctx, &deg, argv[0]) < 0)
                     return JS_EXCEPTION;
 
-                rb->setVelocity(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+                rb->applyTorque(static_cast<float>(deg));
                 return JS_UNDEFINED;
             }
 
-            /* Wrap a native Rigidbody into a JS handle. */
-            JSValue GameObject::wrap_rigidbody(JSContext *ctx, Bokken::GameObject::Rigidbody *rb)
+            JSValue GameObject::js_rigidbody2d_set_velocity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
             {
-                JSValue obj = JS_NewObjectClass(ctx, s_rigidbody_class_id);
-                if (JS_IsException(obj))
-                    return obj;
-                JS_SetOpaque(obj, rb);
-                return obj;
+                auto *rb = static_cast<Bokken::GameObject::Rigidbody2D *>(
+                    JS_GetOpaque(this_val, s_rigidbody2d_class_id));
+                if (!rb || argc < 2)
+                    return JS_UNDEFINED;
+
+                double x, y;
+                if (JS_ToFloat64(ctx, &x, argv[0]) < 0 ||
+                    JS_ToFloat64(ctx, &y, argv[1]) < 0)
+                    return JS_EXCEPTION;
+
+                rb->setVelocity(static_cast<float>(x), static_cast<float>(y));
+                return JS_UNDEFINED;
             }
 
-            /* Wrap a native Transform into a JS handle. */
-            JSValue GameObject::wrap_transform(JSContext *ctx, Bokken::GameObject::Transform *t)
+            // Mesh2D getters/setters.
+            JSValue GameObject::js_mesh2d_get(JSContext *ctx, JSValueConst this_val, int magic)
             {
-                JSValue obj = JS_NewObjectClass(ctx, s_transform_class_id);
+                auto *mesh = static_cast<Bokken::GameObject::Mesh2D *>(
+                    JS_GetOpaque(this_val, s_mesh2d_class_id));
+                if (!mesh)
+                    return JS_UNDEFINED;
+
+                switch (magic)
+                {
+                case M2_Shape:
+                    return JS_NewString(ctx, shape2d_to_string(mesh->shape));
+                case M2_Color:
+                {
+                    uint32_t packed =
+                        (static_cast<uint32_t>(mesh->color.r * 255) << 24) |
+                        (static_cast<uint32_t>(mesh->color.g * 255) << 16) |
+                        (static_cast<uint32_t>(mesh->color.b * 255) << 8) |
+                        static_cast<uint32_t>(mesh->color.a * 255);
+
+                    return JS_NewUint32(ctx, packed);
+                }
+                case M2_FlipX:
+                    return JS_NewBool(ctx, mesh->flipX);
+                case M2_FlipY:
+                    return JS_NewBool(ctx, mesh->flipY);
+                }
+                return JS_UNDEFINED;
+            }
+
+            JSValue GameObject::js_mesh2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
+            {
+                auto *mesh = static_cast<Bokken::GameObject::Mesh2D *>(
+                    JS_GetOpaque(this_val, s_mesh2d_class_id));
+                if (!mesh)
+                    return JS_UNDEFINED;
+
+                switch (magic)
+                {
+                case M2_Shape:
+                {
+                    const char *str = JS_ToCString(ctx, val);
+                    if (str)
+                    {
+                        mesh->shape = parse_shape2d(str);
+                        JS_FreeCString(ctx, str);
+                    }
+                    return JS_UNDEFINED;
+                }
+                case M2_FlipX:
+                    mesh->flipX = JS_ToBool(ctx, val);
+                    return JS_UNDEFINED;
+                case M2_FlipY:
+                    mesh->flipY = JS_ToBool(ctx, val);
+                    return JS_UNDEFINED;
+                }
+
+                double d = 0.0;
+                if (JS_ToFloat64(ctx, &d, val) < 0)
+                    return JS_EXCEPTION;
+                float f = static_cast<float>(d);
+
+                switch (magic)
+                {
+                case M2_Color:
+                {
+                    uint32_t c = 0;
+                    JS_ToUint32(ctx, &c, val);
+                    mesh->color.r = ((c >> 24) & 0xFF) / 255.0f;
+                    mesh->color.g = ((c >> 16) & 0xFF) / 255.0f;
+                    mesh->color.b = ((c >> 8) & 0xFF) / 255.0f;
+                    mesh->color.a = ((c >> 0) & 0xFF) / 255.0f;
+                    return JS_UNDEFINED;
+                }
+                }
+
+                return JS_UNDEFINED;
+            }
+
+            // Wrappers.
+            JSValue GameObject::wrap_transform2d(JSContext *ctx, Bokken::GameObject::Transform2D *t)
+            {
+                JSValue obj = JS_NewObjectClass(ctx, s_transform2d_class_id);
                 if (JS_IsException(obj))
                     return obj;
                 JS_SetOpaque(obj, t);
                 return obj;
             }
 
-            /* Build a {x, y, z} plain object — convenience for vector returns. */
-            JSValue GameObject::make_vec3(JSContext *ctx, const glm::vec3 &v)
+            JSValue GameObject::wrap_rigidbody2d(JSContext *ctx, Bokken::GameObject::Rigidbody2D *rb)
+            {
+                JSValue obj = JS_NewObjectClass(ctx, s_rigidbody2d_class_id);
+                if (JS_IsException(obj))
+                    return obj;
+                JS_SetOpaque(obj, rb);
+                return obj;
+            }
+
+            JSValue GameObject::wrap_mesh2d(JSContext *ctx, Bokken::GameObject::Mesh2D *mesh)
+            {
+                JSValue obj = JS_NewObjectClass(ctx, s_mesh2d_class_id);
+                if (JS_IsException(obj))
+                    return obj;
+                JS_SetOpaque(obj, mesh);
+                return obj;
+            }
+
+            // Copies every own enumerable property from `props` onto `target` by
+            // reading the key from props and setting it on target. This triggers
+            // the target's setters (CGETSET_MAGIC) so { shape: "Quad" } on a
+            // Mesh2D handle calls js_mesh2d_set with M2_Shape automatically.
+            void GameObject::apply_props(JSContext *ctx, JSValue target, JSValue props)
+            {
+                JSPropertyEnum *tab = nullptr;
+                uint32_t len = 0;
+
+                if (JS_GetOwnPropertyNames(ctx, &tab, &len, props,
+                                           JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
+                    return;
+
+                for (uint32_t i = 0; i < len; i++)
+                {
+                    JSValue val = JS_GetProperty(ctx, props, tab[i].atom);
+                    JS_SetProperty(ctx, target, tab[i].atom, val);
+                    // JS_SetProperty takes ownership of val, don't free it.
+                }
+
+                for (uint32_t i = 0; i < len; i++)
+                    JS_FreeAtom(ctx, tab[i].atom);
+
+                js_free(ctx, tab);
+            }
+
+            // Utility.
+            JSValue GameObject::make_vec2(JSContext *ctx, const glm::vec2 &v)
             {
                 JSValue obj = JS_NewObject(ctx);
                 JS_SetPropertyStr(ctx, obj, "x", JS_NewFloat64(ctx, v.x));
                 JS_SetPropertyStr(ctx, obj, "y", JS_NewFloat64(ctx, v.y));
-                JS_SetPropertyStr(ctx, obj, "z", JS_NewFloat64(ctx, v.z));
                 return obj;
             }
 
-            /* Read a {x, y, z} plain object back into a glm::vec3. */
-            bool GameObject::read_vec3(JSContext *ctx, JSValueConst val, glm::vec3 &out)
+            bool GameObject::read_vec2(JSContext *ctx, JSValueConst val, glm::vec2 &out)
             {
                 if (!JS_IsObject(val))
                     return false;
@@ -574,41 +705,42 @@ namespace Bokken
                     return true;
                 };
 
-                return readField("x", out.x) && readField("y", out.y) && readField("z", out.z);
+                return readField("x", out.x) && readField("y", out.y);
             }
 
-            /* Convert a JS string to the Mesh enum — defaults to Empty. */
-            Bokken::GameObject::Mesh GameObject::parse_mesh(const char *name)
+            Bokken::GameObject::Shape2D GameObject::parse_shape2d(const char *name)
             {
                 if (!name)
-                    return Bokken::GameObject::Mesh::Empty;
-                if (strcmp(name, "Cube") == 0)
-                    return Bokken::GameObject::Mesh::Cube;
-                if (strcmp(name, "Sphere") == 0)
-                    return Bokken::GameObject::Mesh::Sphere;
-                if (strcmp(name, "Plane") == 0)
-                    return Bokken::GameObject::Mesh::Plane;
-                return Bokken::GameObject::Mesh::Empty;
+                    return Bokken::GameObject::Shape2D::Empty;
+                if (strcmp(name, "Quad") == 0)
+                    return Bokken::GameObject::Shape2D::Quad;
+                if (strcmp(name, "Circle") == 0)
+                    return Bokken::GameObject::Shape2D::Circle;
+                if (strcmp(name, "Triangle") == 0)
+                    return Bokken::GameObject::Shape2D::Triangle;
+                if (strcmp(name, "Line") == 0)
+                    return Bokken::GameObject::Shape2D::Line;
+                return Bokken::GameObject::Shape2D::Empty;
             }
 
-            /* Convert a Mesh enum value back into its JS-side string form. */
-            const char *GameObject::mesh_to_string(Bokken::GameObject::Mesh mesh)
+            const char *GameObject::shape2d_to_string(Bokken::GameObject::Shape2D shape)
             {
-                switch (mesh)
+                switch (shape)
                 {
-                case Bokken::GameObject::Mesh::Cube:
-                    return "Cube";
-                case Bokken::GameObject::Mesh::Sphere:
-                    return "Sphere";
-                case Bokken::GameObject::Mesh::Plane:
-                    return "Plane";
-                case Bokken::GameObject::Mesh::Empty:
+                case Bokken::GameObject::Shape2D::Quad:
+                    return "Quad";
+                case Bokken::GameObject::Shape2D::Circle:
+                    return "Circle";
+                case Bokken::GameObject::Shape2D::Triangle:
+                    return "Triangle";
+                case Bokken::GameObject::Shape2D::Line:
+                    return "Line";
+                case Bokken::GameObject::Shape2D::Empty:
                 default:
                     return "Empty";
                 }
             }
 
-            /* Engine hook — drives every registered object's components. */
             void GameObject::update(float deltaTime)
             {
                 for (auto &go : Bokken::GameObject::Base::s_objects)
@@ -617,21 +749,15 @@ namespace Bokken
                 Bokken::GameObject::Base::flushDestroyed();
             }
 
-            /* Engine hook — fixed-step physics integration. */
             void GameObject::fixedUpdate(float deltaTime)
             {
                 for (auto &go : Bokken::GameObject::Base::s_objects)
                     go->fixedUpdate(deltaTime);
             }
 
-            /* Engine hook — per-frame render pass.
-             *
-             * Builds a model-view-projection matrix per object using a fixed camera
-             * positioned at (0, 0, -10). Actual mesh rasterisation is left to the
-             * renderer module that consumes these matrices. */
-            void GameObject::render()
+            void GameObject::present()
             {
-                if (!s_window)
+                if (!s_window || !s_batcher)
                     return;
 
                 int w, h;
@@ -639,20 +765,33 @@ namespace Bokken
                 if (w <= 0 || h <= 0)
                     return;
 
-                glm::mat4 projection = glm::perspective(
-                    glm::radians(45.0f),
-                    static_cast<float>(w) / static_cast<float>(h),
-                    0.1f, 100.0f);
-                glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
+                float hw = w * 0.5f;
+                float hh = h * 0.5f;
+
+                // Pixels per world unit — controls zoom. 64 means 1 world unit = 64px.
+                constexpr float PPU = 64.0f;
 
                 for (auto &go : Bokken::GameObject::Base::s_objects)
                 {
-                    auto *t = go->transform;
-                    if (!t || t->mesh == Bokken::GameObject::Mesh::Empty)
+                    auto *t = go->getComponent<Bokken::GameObject::Transform2D>();
+                    auto *mesh = go->getComponent<Bokken::GameObject::Mesh2D>();
+                    if (!t || !mesh || mesh->shape == Bokken::GameObject::Shape2D::Empty)
                         continue;
 
-                    glm::mat4 mvp = projection * view * t->getMatrix();
-                    (void)mvp; /* TODO: hand to MeshStage once 3D lands. */
+                    // World → screen: center of screen is world origin,
+                    // y-up in world but y-down in screen space.
+                    float sx = hw + t->position.x * PPU - (t->scale.x * PPU * 0.5f);
+                    float sy = hh - t->position.y * PPU - (t->scale.y * PPU * 0.5f);
+                    float sw = t->scale.x * PPU;
+                    float sh = t->scale.y * PPU;
+
+                    uint32_t rgba =
+                        (static_cast<uint32_t>(mesh->color.r * 255) << 24) |
+                        (static_cast<uint32_t>(mesh->color.g * 255) << 16) |
+                        (static_cast<uint32_t>(mesh->color.b * 255) << 8) |
+                        static_cast<uint32_t>(mesh->color.a * 255);
+
+                    s_batcher->drawRect(sx, sy, sw, sh, rgba, static_cast<int>(t->zOrder));
                 }
             }
         }

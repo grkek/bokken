@@ -29,6 +29,7 @@
 #include "scripting/modules/Audio.hpp"
 #include "scripting/modules/Canvas.hpp"
 #include "scripting/modules/GameObject.hpp"
+#include "scripting/modules/Input.hpp"
 #include "scripting/modules/Log.hpp"
 #include "scripting/modules/Window.hpp"
 #include "scripting/modules/Renderer.hpp"
@@ -114,9 +115,11 @@ namespace Bokken
         loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Audio>());
         loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Canvas>(loop.window(), &assets));
         loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::GameObject>(loop.window(), &assets));
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Input>());
         loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Log>());
-        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Window>(loop.window()));
         loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Renderer>(loop.renderer()));
+        loop.scriptingEngine().addModule(std::make_unique<Scripting::Modules::Window>(loop.window()));
+
 
         // 4. Entry script.
         if (!assets.exists(BOKKEN_ENTRY_SCRIPT)) {

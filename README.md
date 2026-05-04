@@ -1,6 +1,6 @@
 # Bokken
 
-<img src="https://i.ibb.co/Cs89Vb2w/Screenshot-2026-05-03-at-09-41-10.png"/>
+![Screenshot](https://i.ibb.co/Cs89Vb2w/Screenshot-2026-05-03-at-09-41-10.png)
 
 Bokken is a high-performance, cross-platform 2D game engine built with a focus on systems architecture, custom tooling, and a lightweight scripting runtime.
 

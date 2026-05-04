@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Component.hpp"
-#include "Transform.hpp"
 #include <memory>
 #include <vector>
 #include <string>
@@ -13,17 +12,16 @@ namespace Bokken
 {
     namespace GameObject
     {
+        // The core scene entity. Dimension-agnostic — just a named bag of Components
+        // with parent/child relationships. 2D vs 3D is determined entirely by which
+        // components are attached.
         class Base
         {
         public:
             std::string name;
-            Transform *transform = nullptr;
 
             explicit Base(std::string name = "New GameObject")
-                : name(std::move(name))
-            {
-                transform = &addComponentInternal<Transform>();
-            }
+                : name(std::move(name)) {}
 
             template <typename T>
             T &addComponent()
@@ -42,19 +40,39 @@ namespace Bokken
                 return static_cast<T *>(it->second.get());
             }
 
+            template <typename T>
+            bool hasComponent() const
+            {
+                return m_components.find(std::type_index(typeid(T)))
+                       != m_components.end();
+            }
+
+            template <typename T>
+            void removeComponent()
+            {
+                auto it = m_components.find(std::type_index(typeid(T)));
+                if (it != m_components.end())
+                {
+                    it->second->onDestroy();
+                    m_components.erase(it);
+                }
+            }
+
             void setParent(Base *parent)
             {
                 if (m_parent)
                 {
                     auto &siblings = m_parent->m_children;
-                    siblings.erase(std::remove(siblings.begin(), siblings.end(), this),
-                                   siblings.end());
+                    siblings.erase(
+                        std::remove(siblings.begin(), siblings.end(), this),
+                        siblings.end());
                 }
                 m_parent = parent;
                 if (m_parent)
                     m_parent->m_children.push_back(this);
             }
 
+            Base *getParent() const { return m_parent; }
             std::vector<Base *> getChildren() const { return m_children; }
 
             void update(float dt)
@@ -72,6 +90,7 @@ namespace Bokken
             }
 
             static void destroy(Base *obj) { obj->m_pendingDestroy = true; }
+
             static Base *find(const std::string &name)
             {
                 for (auto &obj : s_objects)
@@ -99,8 +118,7 @@ namespace Bokken
 
         private:
             std::unordered_map<std::type_index,
-                               std::unique_ptr<Component>>
-                m_components;
+                               std::unique_ptr<Component>> m_components;
             std::vector<Base *> m_children;
             Base *m_parent = nullptr;
             bool m_pendingDestroy = false;

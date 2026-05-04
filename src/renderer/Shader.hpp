@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gl/GL.hpp"
+#include <glad/gl.h>
 #include <SDL3/SDL.h>
 
 #include <string>

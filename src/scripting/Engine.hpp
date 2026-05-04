@@ -99,6 +99,7 @@ namespace Bokken
             std::vector<std::unique_ptr<Modules::Base>> m_modules;
 
             // Cached references to the JS hook functions.
+            JSModuleDef *m_lastModule = nullptr;
             JSValue m_fn_onStart = JS_UNDEFINED;
             JSValue m_fn_onUpdate = JS_UNDEFINED;
             JSValue m_fn_onFixedUpdate = JS_UNDEFINED;

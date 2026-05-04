@@ -3,9 +3,11 @@
 #include "Base.hpp"
 #include "../Engine.hpp"
 #include "../../game_object/Base.hpp"
-#include "../../game_object/Mesh.hpp"
-#include "../../game_object/Rigidbody.hpp"
-#include "../../game_object/Transform.hpp"
+#include "../../game_object/Shape2D.hpp"
+#include "../../game_object/Mesh2D.hpp"
+#include "../../game_object/Rigidbody2D.hpp"
+#include "../../renderer/SpriteBatcher.hpp"
+#include "../../game_object/Transform2D.hpp"
 #include "../../AssetPack.hpp"
 
 #include <SDL3/SDL.h>
@@ -18,57 +20,43 @@ namespace Bokken
     {
         namespace Modules
         {
-            /*
-             * Bridges Bokken's native GameObject layer (engine-side scene graph,
-             * components, transforms, physics) into the JS scripting runtime.
-             *
-             * Exposes the "bokken/gameObject" module with:
-             *   - GameObject class (constructor, addComponent, getComponent,
-             *     setParent, getChildren, static destroy, static find).
-             *   - Mesh enum (Empty, Cube, Sphere, Plane).
-             *   - Transform / Rigidbody as opaque-wrapped component handles.
-             *
-             * Engine integration:
-             *   The static update / fixedUpdate / render hooks must be called from
-             *   the main Loop each frame so the registered objects tick correctly.
-             */
+            // Bridges the native GameObject layer into JS via "bokken/gameObject".
+            //
+            // addComponent returns `this` for chaining and accepts an optional
+            // config object as a second argument:
+            //
+            //   player
+            //       .addComponent(Transform2D, { positionX: 5 })
+            //       .addComponent(Mesh2D, { shape: Shape2D.Quad, colorR: 1.0 })
+            //       .addComponent(Rigidbody2D, { mass: 2 });
+            //
+            // getComponent returns the wrapped component handle.
             class GameObject : public Base
             {
             public:
-                /**
-                 * Construct the bokken/gameObject scripting module.
-                 *
-                 * Post-GL refactor we no longer hold a renderer — render
-                 * is currently a no-op (the 2D path is the Canvas tree;
-                 * 3D mesh rendering will land in a future MeshStage).
-                 * Window is kept for aspect-ratio queries.
-                 */
                 GameObject(SDL_Window *window, AssetPack *assets)
                     : Base("bokken/gameObject"), m_window(window), m_assets(assets) {}
+
+                // Wired in by the Renderer module before the first frame.
+                static void setBatcher(Bokken::Renderer::SpriteBatcher *b) { s_batcher = b; }
 
                 int declare(JSContext *ctx, JSModuleDef *m) override;
                 int init(JSContext *ctx, JSModuleDef *m) override;
 
-                /* Per-frame update — drives every registered GameObject's components. */
                 static void update(float deltaTime);
-
-                /* Fixed-step update — primarily used by Rigidbody integration. */
                 static void fixedUpdate(float deltaTime);
+                static void present();
 
-                /* Render pass — placeholder until 3D MeshStage lands. */
-                static void render();
-
-            private:
-                SDL_Window *m_window;
-                AssetPack *m_assets;
-
-                static inline JSClassID s_class_id = 0;
-                static inline JSClassID s_rigidbody_class_id = 0;
-                static inline JSClassID s_transform_class_id = 0;
+                // QuickJS C callbacks and helpers — public because file-scope
+                // static function list arrays need to reference them directly.
+                static inline JSClassID s_class_id             = 0;
+                static inline JSClassID s_transform2d_class_id = 0;
+                static inline JSClassID s_rigidbody2d_class_id = 0;
+                static inline JSClassID s_mesh2d_class_id      = 0;
 
                 static inline SDL_Window *s_window = nullptr;
+                static inline Bokken::Renderer::SpriteBatcher *s_batcher = nullptr;
 
-                /* GameObject class — constructor & instance / static methods. */
                 static JSValue js_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
                 static JSValue js_add_component(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue js_get_component(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -77,25 +65,32 @@ namespace Bokken
                 static JSValue js_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
                 static JSValue js_find(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
-                /* Transform — getters / setters / methods. */
-                static JSValue js_transform_get(JSContext *ctx, JSValueConst this_val, int magic);
-                static JSValue js_transform_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
-                static JSValue js_transform_translate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-                static JSValue js_transform_rotate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_transform2d_get(JSContext *ctx, JSValueConst this_val, int magic);
+                static JSValue js_transform2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+                static JSValue js_transform2d_translate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_transform2d_rotate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
-                /* Rigidbody — getters / setters / methods. */
-                static JSValue js_rigidbody_get(JSContext *ctx, JSValueConst this_val, int magic);
-                static JSValue js_rigidbody_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
-                static JSValue js_rigidbody_apply_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-                static JSValue js_rigidbody_set_velocity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_rigidbody2d_get(JSContext *ctx, JSValueConst this_val, int magic);
+                static JSValue js_rigidbody2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+                static JSValue js_rigidbody2d_apply_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_rigidbody2d_apply_torque(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+                static JSValue js_rigidbody2d_set_velocity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
-                /* Helpers. */
-                static JSValue wrap_rigidbody(JSContext *ctx, Bokken::GameObject::Rigidbody *rb);
-                static JSValue wrap_transform(JSContext *ctx, Bokken::GameObject::Transform *t);
-                static JSValue make_vec3(JSContext *ctx, const glm::vec3 &v);
-                static bool read_vec3(JSContext *ctx, JSValueConst val, glm::vec3 &out);
-                static Bokken::GameObject::Mesh parse_mesh(const char *name);
-                static const char *mesh_to_string(Bokken::GameObject::Mesh mesh);
+                static JSValue js_mesh2d_get(JSContext *ctx, JSValueConst this_val, int magic);
+                static JSValue js_mesh2d_set(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+
+                static JSValue wrap_transform2d(JSContext *ctx, Bokken::GameObject::Transform2D *t);
+                static JSValue wrap_rigidbody2d(JSContext *ctx, Bokken::GameObject::Rigidbody2D *rb);
+                static JSValue wrap_mesh2d(JSContext *ctx, Bokken::GameObject::Mesh2D *mesh);
+                static void apply_props(JSContext *ctx, JSValue target, JSValue props);
+                static JSValue make_vec2(JSContext *ctx, const glm::vec2 &v);
+                static bool    read_vec2(JSContext *ctx, JSValueConst val, glm::vec2 &out);
+                static Bokken::GameObject::Shape2D parse_shape2d(const char *name);
+                static const char *shape2d_to_string(Bokken::GameObject::Shape2D shape);
+
+            private:
+                SDL_Window *m_window;
+                AssetPack  *m_assets;
             };
         }
     }

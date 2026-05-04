@@ -1,162 +1,128 @@
-/* The type of a mesh. */
-export enum Mesh {
-    /* Empty */
-    Empty = "Empty",
-    /* Cube */
-    Cube = "Cube",
-    /* Sphere */
-    Sphere = "Sphere",
-    /* Plane */
-    Plane = "Plane",
-}
+declare module "bokken/gameObject" {
+    /** Primitive shapes for 2D rendering. */
+    export enum Shape2D {
+        Empty = "Empty",
+        Quad = "Quad",
+        Circle = "Circle",
+        Triangle = "Triangle",
+        Line = "Line",
+    }
 
-/**
- * The base interface for all functional units attached to a GameObject.
- * Data for Native components resides in C++ memory, while Behaviours live in the JS VM.
- */
-export abstract class Component {
-    /** The GameObject instance this component is currently attached to. */
-    readonly gameObject: GameObject;
-
-    /** * Toggles the component's execution. 
-     * When false, C++ systems (Physics/Renderer) and JS lifecycle hooks will skip this component. 
-     */
-    public enabled: boolean;
-}
-
-/**
- * Mandatory Native Component that defines the object's presence in 3D space.
- * Every GameObject is born with a Transform. Modifications are mirrored instantly 
- * in the C++ Scene Graph for rendering and spatial queries.
- */
-export class Transform extends Component {
-    /** Position on the X, Y, and Z axes in world/local space. */
-    public x: number;
-    public y: number;
-    public z: number;
-
-    /** Euler rotation angles in degrees for each axis. */
-    public rotationX: number;
-    public rotationY: number;
-    public rotationZ: number;
-
-    /** Scale multipliers for each axis. (1.0 is original size). */
-    public scaleX: number;
-    public scaleY: number;
-    public scaleZ: number;
-
-    /** * Moves the transform by a given offset. 
-     * This is faster than setting x/y/z individually as it performs a single C++ vector addition.
-     */
-    translate(x: number, y: number, z: number): void;
-
-    /** * Rotates the transform by the specified Euler angles. 
-     */
-    rotate(x: number, y: number, z: number): void;
-}
-
-/**
- * The entry point for custom game logic. 
- * Instances are tracked by the C++ Registry and invoked during the engine's logical update pass.
- */
-export abstract class Behaviour extends Component {
-    /** Shortcut to the GameObject's Transform component. */
-    readonly transform: Transform;
-
-    /** Invoked by the C++ Engine once when the script is first enabled or instantiated. */
-    onStart?(): void;
-
-    /** Invoked by the C++ Engine every frame. Use for input and non-physics logic. */
-    onUpdate?(deltaTime: number): void;
-
-    /** * Invoked at a consistent, fixed time interval. 
-     * Primary location for physics calculations and Rigidbody manipulations. 
-     */
-    onFixedUpdate?(deltaTime: number): void;
-
-    /** Invoked by the C++ Engine immediately before the object or component is destroyed. */
-    onDestroy?(): void;
-}
-
-/** * Native Physics Component linking the entity to the C++ Physics World (e.g., Box2D/Bullet).
- * Forces and velocities are computed in native code for maximum performance.
- */
-export class Rigidbody extends Component {
-    /** The mass of the object. Higher mass requires more force to move. */
-    public mass: number;
-
-    /** If true, the C++ physics solver will apply a global gravity force to this body. */
-    public useGravity: boolean;
-
-    /** If true, the object is immovable (e.g., a floor) but can still collide with other bodies. */
-    public isStatic: boolean;
-
-    /** * Pushes the object in C++ memory. 
-     * Force is applied at the center of mass unless otherwise specified by the native implementation.
-     */
-    applyForce(x: number, y: number, z: number): void;
-
-    /** Overwrites the current linear velocity in the C++ physics state. */
-    setVelocity(x: number, y: number, z: number): void;
-}
-
-/** * Defines the initial state of a GameObject upon creation.
- */
-export interface GameObjectProperties {
-    name?: string;
-    mesh?: Mesh;
-    position?: { x?: number, y?: number, z?: number };
-    rotation?: { x?: number, y?: number, z?: number };
-    /** Uniform scale (number) or non-uniform scale (vector). */
-    scale?: number | { x?: number, y?: number, z?: number };
-}
-
-/**
- * The primary container for all entities in the Bokken Engine.
- * A GameObject is essentially a 'Handle' to a C++ Entity ID. 
- * It manages the lifecycle of both Native components and Scripted Behaviours.
- */
-export class GameObject {
-    /** Unique internal ID used to communicate with the C++ Entity Registry. */
-    private readonly nativeHandle: number;
-
-    /** * Shortcut to the Transform component. 
-     * Guaranteed to be present on every GameObject. 
-     */
-    readonly transform: Transform;
-
-    /** * Creates a new entity within the C++ Registry.
-     * @param name Optional name for the entity (defaults to "New GameObject").
-     */
-    constructor(configuration?: GameObjectProperties);
+    /** Base interface for all functional units attached to a GameObject. */
+    export abstract class Component {
+        readonly gameObject: GameObject;
+        public enabled: boolean;
+    }
 
     /**
-     * Instantiates and attaches a Component or Behaviour to this entity.
-     * @param componentClass The class constructor (e.g., Rigidbody or a custom Behaviour).
-     * @returns The newly created component instance.
+     * 2D spatial transform: position, rotation (z-axis), scale, and draw order.
+     * Does not carry visual state — attach a Mesh2D for that.
      */
-    addComponent<T extends Component>(componentClass: new () => T): T;
+    export class Transform2D extends Component {
+        public positionX: number;
+        public positionY: number;
+        public rotation: number;
+        public scaleX: number;
+        public scaleY: number;
+        public zOrder: number;
 
-    /** * Searches the entity for a component of the specified type.
-     * @returns The component instance if found, otherwise undefined.
+        /** Moves the transform by the given offset in a single native call. */
+        translate(positionX: number, positionY: number): void;
+
+        /** Rotates by the given degrees (counter-clockwise). */
+        rotate(degrees: number): void;
+    }
+
+    /**
+     * Visual representation of a 2D game object.
+     * Separated from Transform2D so invisible objects (triggers, spawners)
+     * don't carry render state.
      */
-    getComponent<T extends Component>(componentClass: new () => T): T | undefined;
+    export class Mesh2D extends Component {
+        public shape: Shape2D;
+        public color: number;
+        public flipX: boolean;
+        public flipY: boolean;
+    }
 
-    /** * Helper to set the parent of this object's transform.
-     * Behind the scenes, C++ will update the Scene Graph.
+    /**
+     * 2D rigid-body dynamics in the XY plane.
+     * Forces, velocity, and angular velocity are computed in native code.
      */
-    setParent(parent: GameObject | null): void;
+    export class Rigidbody2D extends Component {
+        public mass: number;
+        public useGravity: boolean;
+        public isStatic: boolean;
+        public velocityX: number;
+        public velocityY: number;
+        public angularVelocity: number;
 
-    /** Returns all immediate child GameObjects. */
-    getChildren(): GameObject[];
+        /** Applies a force at the center of mass. */
+        applyForce(velocityX: number, velocityY: number): void;
 
-    /** * Flags the entity for removal in the C++ Registry. 
-     * This will destroy all attached components and free the native memory at the end of the frame.
+        /** Applies angular torque in degrees. */
+        applyTorque(degrees: number): void;
+
+        /** Overwrites the current linear velocity. */
+        setVelocity(velocityX: number, velocityY: number): void;
+    }
+
+    /**
+     * Abstract base for JS-authored game scripts.
+     * Scripts query their own transform via gameObject.getComponent(Transform2D).
      */
-    static destroy(obj: GameObject): void;
+    export abstract class Behaviour extends Component {
+        onStart?(): void;
+        onUpdate?(deltaTime: number): void;
+        onFixedUpdate?(deltaTime: number): void;
+        onDestroy?(): void;
+    }
 
-    /** * Iterates through the C++ Registry to find the first GameObject with the matching name. 
-     * Note: This is an O(n) operation; avoid calling it inside onUpdate.
+    /** Extracts the writable public properties of a component for use as a config object. */
+    type ComponentProperties<T> = {
+        [K in keyof T as T[K] extends (...args: any[]) => any ? never : K]?: T[K];
+    };
+
+    /**
+     * The primary container for all entities in the Bokken engine.
+     * Dimension-agnostic — 2D or 3D is determined by which components
+     * are attached.
      */
-    static find(name: string): GameObject | undefined;
+    export class GameObject {
+        /**
+         * Creates a new entity in the native registry.
+         * @param name Optional display name (defaults to "Untitled").
+         */
+        constructor(name?: string);
+
+        /**
+         * Attaches a component and returns `this` for chaining.
+         * Accepts an optional config object to set properties inline.
+         *
+         * @example
+         * const player = new GameObject("Player")
+         *     .addComponent(Transform2D, { positionX: 5, positionY: 3 })
+         *     .addComponent(Mesh2D, { shape: Shape2D.Quad, colorR: 1.0 })
+         *     .addComponent(Rigidbody2D, { mass: 2, useGravity: true });
+         */
+        addComponent<T extends Component>(componentClass: new () => T, props?: ComponentProperties<T>): this;
+
+        /**
+         * Retrieves an attached component by type.
+         * @returns The component instance if found, otherwise undefined.
+         */
+        getComponent<T extends Component>(componentClass: new () => T): T | undefined;
+
+        /** Sets the parent of this object in the scene hierarchy. */
+        setParent(parent: GameObject | null): void;
+
+        /** Returns all immediate child GameObjects. */
+        getChildren(): GameObject[];
+
+        /** Flags the entity for destruction at the end of the frame. */
+        static destroy(obj: GameObject): void;
+
+        /** Finds the first GameObject with the given name. O(n) — avoid in onUpdate. */
+        static find(name: string): GameObject | undefined;
+    }
 }

@@ -14,13 +14,7 @@ struct CompilerContext
     fs::path sourceDirectory;
 };
 
-static int StubLogModule(JSContext *ctx, JSModuleDef *m)
-{
-    JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
-    return 0;
-}
-
-static int StubWindowModule(JSContext *ctx, JSModuleDef *m)
+static int StubAudioModule(JSContext *ctx, JSModuleDef *m)
 {
     JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
     return 0;
@@ -38,7 +32,19 @@ static int StubGameObjectModule(JSContext *ctx, JSModuleDef *m)
     return 0;
 }
 
-static int StubAudioModule(JSContext *ctx, JSModuleDef *m)
+static int StubInputModule(JSContext *ctx, JSModuleDef *m)
+{
+    JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
+    return 0;
+}
+
+static int StubLogModule(JSContext *ctx, JSModuleDef *m)
+{
+    JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
+    return 0;
+}
+
+static int StubWindowModule(JSContext *ctx, JSModuleDef *m)
 {
     JS_SetModuleExport(ctx, m, "default", JS_NewObject(ctx));
     return 0;
@@ -49,9 +55,30 @@ static JSModuleDef *StubModuleLoader(JSContext *ctx, const char *module_name, vo
     auto *configuration = static_cast<CompilerContext *>(opaque);
 
     // 1. Resolve Native Bokken Modules
+    if (strcmp(module_name, "bokken/audio") == 0)
+    {
+        JSModuleDef *m = JS_NewCModule(ctx, "bokken/audio", StubAudioModule);
+        JS_AddModuleExport(ctx, m, "default");
+        return m;
+    }
+
     if (strcmp(module_name, "bokken/canvas") == 0)
     {
         JSModuleDef *m = JS_NewCModule(ctx, "bokken/canvas", StubCanvasModule);
+        JS_AddModuleExport(ctx, m, "default");
+        return m;
+    }
+
+    if (strcmp(module_name, "bokken/gameObject") == 0)
+    {
+        JSModuleDef *m = JS_NewCModule(ctx, "bokken/gameObject", StubGameObjectModule);
+        JS_AddModuleExport(ctx, m, "default");
+        return m;
+    }
+
+    if (strcmp(module_name, "bokken/input") == 0)
+    {
+        JSModuleDef *m = JS_NewCModule(ctx, "bokken/input", StubInputModule);
         JS_AddModuleExport(ctx, m, "default");
         return m;
     }
@@ -66,20 +93,6 @@ static JSModuleDef *StubModuleLoader(JSContext *ctx, const char *module_name, vo
     if (strcmp(module_name, "bokken/window") == 0)
     {
         JSModuleDef *m = JS_NewCModule(ctx, "bokken/window", StubWindowModule);
-        JS_AddModuleExport(ctx, m, "default");
-        return m;
-    }
-
-    if (strcmp(module_name, "bokken/gameObject") == 0)
-    {
-        JSModuleDef *m = JS_NewCModule(ctx, "bokken/gameObject", StubGameObjectModule);
-        JS_AddModuleExport(ctx, m, "default");
-        return m;
-    }
-
-    if (strcmp(module_name, "bokken/audio") == 0)
-    {
-        JSModuleDef *m = JS_NewCModule(ctx, "bokken/audio", StubAudioModule);
         JS_AddModuleExport(ctx, m, "default");
         return m;
     }

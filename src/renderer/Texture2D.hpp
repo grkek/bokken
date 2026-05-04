@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gl/GL.hpp"
+#include <glad/gl.h>
 
 #include <cstdint>
 

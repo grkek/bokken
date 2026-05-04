@@ -3,9 +3,9 @@
 #include "Texture2D.hpp"
 #include "../AssetPack.hpp"
 
+#include <glad/gl.h>
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
-#include "gl/GL.hpp"
 
 #include <unordered_map>
 #include <string>

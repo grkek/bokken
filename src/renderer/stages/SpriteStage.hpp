@@ -2,7 +2,7 @@
 
 #include "../Stage.hpp"
 
-#include "../gl/GL.hpp"
+#include "glad/gl.h"
 
 namespace Bokken
 {

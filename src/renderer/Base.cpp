@@ -33,12 +33,31 @@ namespace Bokken
             SDL_GL_MakeCurrent(window, m_glContext);
             SDL_GL_SetSwapInterval(1); // vsync; can be flipped at runtime later
 
-            if (!GL::load())
+            // glad's loader takes a callback with signature
+            //   void* (const char *)
+            // SDL3's SDL_GL_GetProcAddress returns an SDL_FunctionPointer
+            // (a typed function-pointer alias), not void*. They're
+            // ABI-compatible — SDL_FunctionPointer is just a typed
+            // function pointer — but the C++ type system needs the
+            // explicit reinterpret_cast.
+            const int version = gladLoadGL(
+                reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress));
+
+            if (version == 0)
             {
-                SDL_LogError(SDL_LOG_CATEGORY_RENDER, "[Renderer] GL function load failed");
+                SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                             "[GL] gladLoadGL failed — no GL context current?");
                 return false;
             }
-            GL::logInfo();
+
+            const int major = GLAD_VERSION_MAJOR(version);
+            const int minor = GLAD_VERSION_MINOR(version);
+            if (major < 3 || (major == 3 && minor < 3))
+            {
+                SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                             "[GL] need GL 3.3 core, got %d.%d", major, minor);
+                return false;
+            }
 
             // Establish current size before we build resources sized to it.
             updateSize();

@@ -21,10 +21,15 @@ namespace Bokken
                 return nullptr;
             }
 
-            // 2. Load from AssetPack
-            if (engine && engine->m_assets && engine->m_assets->exists(name))
+            // Remap the module path to the expected location in the AssetPack
+            std::string path = std::string("/scripts/") + name;
+            size_t pos = path.rfind(".js");
+            if (pos != std::string::npos)
+                path.replace(pos, 3, ".script");
+
+            if (engine && engine->m_assets && engine->m_assets->exists(path.c_str()))
             {
-                std::vector<uint8_t> bc = engine->m_assets->readBytes(name);
+                std::vector<uint8_t> bc = engine->m_assets->readBytes(path.c_str());
                 if (!bc.empty())
                 {
                     JSValue obj = JS_ReadObject(ctx, bc.data(), bc.size(), JS_READ_OBJ_BYTECODE);
@@ -106,6 +111,8 @@ namespace Bokken
                 JS_FreeValue(m_ctx, object);
                 return false;
             }
+
+            m_lastModule = (JSModuleDef *)JS_VALUE_GET_PTR(object);
 
             JSValue result = JS_EvalFunction(m_ctx, object);
             if (JS_IsException(result))
@@ -289,51 +296,31 @@ namespace Bokken
 
         void Engine::extractLifecycle(const std::string &modulePath)
         {
-            // Bridge script to move exports to globalThis
-            std::string bridgeScript =
-                "import('" + modulePath + "').then(m => {"
-                                          "  globalThis.__onStart = m.onStart;"
-                                          "  globalThis.__onUpdate = m.onUpdate;"
-                                          "  globalThis.__onFixedUpdate = m.onFixedUpdate;"
-                                          "}).catch(e => console.error('[Bokken] Extract Error:', e));";
+            if (!m_lastModule)
+                return;
 
-            JSValue val = JS_Eval(m_ctx, bridgeScript.c_str(), bridgeScript.size(),
-                                  "<lifecycle_bridge>", JS_EVAL_TYPE_GLOBAL);
-
-            if (JS_IsException(val))
-            {
-                reportException("LifecycleBridge");
-            }
-            JS_FreeValue(m_ctx, val);
-
-            // Execute the .then() callback
-            drainJobQueue();
-
-            JSValue global = JS_GetGlobalObject(m_ctx);
+            JSValue ns = JS_GetModuleNamespace(m_ctx, m_lastModule);
+            if (JS_IsException(ns))
+                return;
 
             auto syncHook = [&](const char *prop, JSValue &member)
             {
-                JS_FreeValue(m_ctx, member); // Prevent leaks on reload
-
-                JSValue fn = JS_GetPropertyStr(m_ctx, global, prop);
+                JS_FreeValue(m_ctx, member);
+                JSValue fn = JS_GetPropertyStr(m_ctx, ns, prop);
                 if (JS_IsFunction(m_ctx, fn))
-                {
                     member = fn;
-                }
                 else
                 {
                     member = JS_UNDEFINED;
                     JS_FreeValue(m_ctx, fn);
                 }
-                // Clean up global temp property
-                JS_SetPropertyStr(m_ctx, global, prop, JS_UNDEFINED);
             };
 
-            syncHook("__onStart", m_fn_onStart);
-            syncHook("__onUpdate", m_fn_onUpdate);
-            syncHook("__onFixedUpdate", m_fn_onFixedUpdate);
+            syncHook("onStart", m_fn_onStart);
+            syncHook("onUpdate", m_fn_onUpdate);
+            syncHook("onFixedUpdate", m_fn_onFixedUpdate);
 
-            JS_FreeValue(m_ctx, global);
+            JS_FreeValue(m_ctx, ns);
         }
     } // namespace Scripting
 

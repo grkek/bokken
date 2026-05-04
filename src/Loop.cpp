@@ -96,7 +96,8 @@ namespace Bokken
 
         // Wire the renderer into the Canvas pieces that need it.
         Scripting::Modules::Canvas::setBatcher(&m_renderer->batcher());
-        Bokken::Canvas::Components::Label::s_glyphCache = &m_renderer->glyphs();
+        Scripting::Modules::GameObject::setBatcher(&m_renderer->batcher());
+        Canvas::Components::Label::s_glyphCache = &m_renderer->glyphs();
 
         // Scripting engine.
         if (!this->scriptingEngine().init(assets,
@@ -162,6 +163,7 @@ namespace Bokken
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             Scripting::Modules::Canvas::handleEvent(e);
+            Scripting::Modules::Input::handleEvent(e); 
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                 case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -199,13 +201,16 @@ namespace Bokken
         m_renderer->beginFrame();
 
         // Modules submit draws into m_renderer->batcher() during these calls.
-        Scripting::Modules::GameObject::render();
+        Scripting::Modules::GameObject::present();
         Scripting::Modules::Canvas::present();
 
         m_renderer->endFrame((float)dt);
 
         // Tiny yield so we don't spin in the rare case vsync is off.
         SDL_Delay(0);
+
+        // Clear transient input state after the frame.
+        Scripting::Modules::Input::endFrame();
     }
 
     void Loop::shutdown()
@@ -223,7 +228,7 @@ namespace Bokken
         }
 
         Scripting::Modules::Canvas::clear_font_cache();
-        Bokken::Canvas::Components::Label::clear_font_cache();
+        Canvas::Components::Label::clear_font_cache();
 
         TTF_Quit();
         SDL_Quit();

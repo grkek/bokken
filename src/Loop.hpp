@@ -2,12 +2,13 @@
 
 #include "Configuration.hpp"
 #include "AssetPack.hpp"
-#include "./scripting/Engine.hpp"
-#include "./scripting/modules/Canvas.hpp"
-#include "./scripting/modules/GameObject.hpp"
 #include "./renderer/Base.hpp"
-#include "canvas/components/Label.hpp"
-#include "renderer/stages/SpriteStage.hpp"
+#include "./scripting/modules/Canvas.hpp"
+#include "./scripting/Engine.hpp"
+#include "./scripting/modules/GameObject.hpp"
+#include "./scripting/modules/Input.hpp"
+#include "./canvas/components/Label.hpp"
+#include "./renderer/stages/SpriteStage.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
